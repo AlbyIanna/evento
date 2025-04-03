@@ -1,0 +1,72 @@
+<style>
+  @import '/components/event-form/styles.css';
+</style>
+<!-- Font Awesome for icons -->
+<link
+  rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+/>
+<form id="event-form" novalidate>
+  <div class="form-group">
+    <label for="title">Event Title*</label>
+    <input
+      type="text"
+      id="title"
+      name="title"
+      required
+      aria-required="true"
+      aria-describedby="title-error"
+      placeholder="e.g. Alberto's Birthday Party"
+    />
+    <div id="title-error" class="field-error hidden" aria-live="polite"></div>
+  </div>
+  <div class="form-group">
+    <label for="datetime">Date*</label>
+    <input
+      type="datetime-local"
+      id="datetime"
+      name="datetime"
+      required
+      aria-required="true"
+      aria-describedby="datetime-error"
+    />
+    <div id="datetime-error" class="field-error hidden" aria-live="polite"></div>
+  </div>
+  <div class="form-group">
+    <label for="location">Location*</label>
+    <input
+      type="text"
+      id="location"
+      name="location"
+      required
+      aria-required="true"
+      aria-describedby="location-error"
+    />
+    <div id="location-error" class="field-error hidden" aria-live="polite"></div>
+  </div>
+  <div class="form-group">
+    <label for="description">Description</label>
+    <textarea id="description" name="description" rows="4"></textarea>
+  </div>
+  <div class="button-container">
+    <!-- Create mode button -->
+    <button type="submit" id="create-button">Create Event Link</button>
+
+    <!-- Edit mode buttons -->
+    <button type="submit" id="update-button" class="hidden">
+      <i class="fas fa-link" aria-hidden="true"></i> Generate New Link
+    </button>
+    <a id="cancel-button" class="cancel-button hidden" href=""
+      ><i class="fas fa-times" aria-hidden="true"></i> Cancel</a
+    >
+  </div>
+  <div id="validation-summary" class="validation-summary hidden" aria-live="polite" role="alert">
+    <p>
+      <strong
+        ><i class="fas fa-exclamation-circle" aria-hidden="true"></i> Please fix the following
+        errors:</strong
+      >
+    </p>
+    <ul id="validation-errors"></ul>
+  </div>
+</form>

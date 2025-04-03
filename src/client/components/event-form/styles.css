@@ -1,0 +1,182 @@
+:host {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+#event-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
+  max-width: 100%;
+}
+
+.form-group {
+  margin-bottom: 0;
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  width: 100%;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+input,
+textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--primary-color, #007bff);
+}
+
+input.invalid,
+textarea.invalid {
+  border-color: #dc3545;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 6rem;
+}
+
+button {
+  flex: 1;
+  padding: 0.75rem;
+  background-color: var(--primary-color, #007bff);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  box-sizing: border-box;
+}
+
+button:hover {
+  background-color: var(--primary-color-dark, #0056b3);
+}
+
+button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+/* Validation styles */
+.field-error {
+  color: #dc3545;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+/* Utility classes needed for shadow DOM */
+.hidden {
+  display: none !important;
+}
+
+.visible {
+  display: block;
+}
+
+.validation-summary {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-top: 1rem;
+  margin-bottom: 0;
+  border-left: 4px solid #dc3545;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
+  max-height: 30vh; /* Limit height to avoid expanding too much */
+  overflow-y: auto; /* Allow scrolling if there are too many errors */
+  overflow-x: hidden; /* Prevent horizontal scrolling */
+  word-wrap: break-word; /* Ensure text wraps */
+  word-break: break-word; /* Break long words if needed */
+}
+
+.validation-summary p {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.validation-summary ul {
+  margin: 0.5rem 0 0 1.5rem;
+  padding: 0;
+  list-style-position: outside;
+}
+
+.validation-summary li {
+  margin-bottom: 0.25rem;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.button-container {
+  display: flex;
+  gap: 1rem;
+  margin: 0.5rem 0 0 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Add styles for edit mode buttons */
+.edit-buttons {
+  justify-content: space-between;
+}
+
+.save-button {
+  background-color: var(--primary-color, #4caf50);
+}
+
+.save-button:hover {
+  background-color: var(--primary-color-dark, #388e3c);
+}
+
+.cancel-button {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.75rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.cancel-button:hover {
+  background-color: #5a6268;
+  text-decoration: none;
+  color: white;
+}
