@@ -4,23 +4,30 @@ A modern event-sharing application built with Fastify and Vite, designed to make
 
 ## Features
 
-- Fast and efficient event sharing
-- Modern web interface
-- RESTful API architecture
-- Built-in security features
-- Development and production ready
+- **Simple Event Creation**: Create and customize events with an intuitive form interface
+- **Modern UI**: Clean, responsive interface built with Web Components
+- **No Login, No Data**: The application is designed to be private and secure, with no login required - all event data is encoded in the URL
 
-## Prerequisites
+## Documentation
+
+- [Architecture Overview](docs/architecture.md) - Detailed system design and components
+- [Getting Started](#getting-started) - Quick start guide
+- [Development](#development) - Development workflow
+- [Contributing](#contributing) - How to contribute
+
+## Getting Started
+
+### Prerequisites
 
 - Node.js (v18 or higher)
 - npm (v9 or higher)
 
-## Installation
+### Installation
 
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/evento.git
+git clone https://github.com/AlbyIanna/evento.git
 cd evento
 ```
 
@@ -30,17 +37,15 @@ cd evento
 npm install
 ```
 
-## Development
-
-Start the development server:
+3. Start the development server:
 
 ```bash
 npm run dev
 ```
 
-This will start both the frontend and backend servers in development mode.
+## Development
 
-## Available Scripts
+### Available Scripts
 
 - `npm run dev` - Start development server
 - `npm run build` - Build for production
@@ -52,25 +57,41 @@ This will start both the frontend and backend servers in development mode.
 - `npm run lint` - Run ESLint
 - `npm run format` - Format code with Prettier
 
-## Project Structure
+### Project Structure
 
 ```
 evento/
-├── src/            # Source files
+├── docs/           # Documentation
+├── src/            # Source code
+│   ├── client/     # Frontend application
+│   └── server.js   # Backend server
 ├── dist/           # Production build
-├── viteCustomPlugins/  # Custom Vite plugins
-└── tests/          # Test files
+└── viteCustomPlugins/ # Build customizations
 ```
 
-## Technology Stack
+### Technology Stack
 
+- **Frontend**: Vite + Vanilla JavaScript (Web Components)
 - **Backend**: Fastify
-- **Frontend**: Vite
 - **Testing**: Vitest
-- **Linting**: ESLint
-- **Formatting**: Prettier
-- **Git Hooks**: Husky
+- **Build Tools**: Vite, Terser, PostCSS
+- **Code Quality**: ESLint, Prettier
+- **Version Control**: Git with Husky pre-commit hooks
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+Please read our [Architecture Documentation](docs/architecture.md) before contributing.
 
 ## License
 
 ISC
+
+## Security
+
+For security concerns, please email [albyianna@gmail.com].
