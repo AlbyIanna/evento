@@ -1,7 +1,8 @@
 export function encodeEventData(eventData) {
   try {
     const jsonString = JSON.stringify(eventData);
-    const base64 = btoa(jsonString).replace(/\//g, '_').replace(/=+$/, '');
+    const encoded = encodeURIComponent(jsonString);
+    const base64 = btoa(encoded).replace(/\//g, '_').replace(/=+$/, '');
     return base64;
   } catch (_error) {
     console.error('Failed to encode event data:', _error);
@@ -12,7 +13,8 @@ export function encodeEventData(eventData) {
 export function decodeEventData(encodedEvent) {
   try {
     const base64 = encodedEvent.replace(/_/g, '/');
-    return JSON.parse(atob(base64));
+    const decoded = atob(base64);
+    return JSON.parse(decodeURIComponent(decoded));
   } catch (_error) {
     console.error('Invalid event data format:', _error);
     throw new Error('Invalid event data format');
@@ -20,16 +22,24 @@ export function decodeEventData(encodedEvent) {
 }
 
 export function validateEventData(data) {
-  if (!data || typeof data !== 'object') {
+  // Check if data is an object and not null
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return false;
   }
 
   // Must have title, datetime, and location as strings
   if (
     typeof data.title !== 'string' ||
-    typeof data.location !== 'string' ||
-    typeof data.datetime !== 'string'
+    data.title.trim().length === 0 ||
+    typeof data.datetime !== 'string' ||
+    typeof data.location !== 'string'
   ) {
+    return false;
+  }
+
+  // Validate datetime format
+  const date = new Date(data.datetime);
+  if (isNaN(date.getTime())) {
     return false;
   }
 

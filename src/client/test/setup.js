@@ -1,5 +1,53 @@
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { vi, expect, afterEach } from 'vitest';
+import { cleanup } from '@testing-library/dom';
+import { toBeValidEventData } from './utils';
+
+// Add custom matchers
+expect.extend({
+  toBeValidEventData
+});
+
+// Clean up DOM after each test
+afterEach(() => {
+  cleanup();
+  // Clean up any global state
+  window.localStorage.clear();
+  // Reset URL to default
+  window.history.pushState({}, '', '/');
+});
+
+// Mock window.location methods
+const originalLocation = window.location;
+beforeAll(() => {
+  delete window.location;
+  window.location = {
+    ...originalLocation,
+    assign: vi.fn(),
+    replace: vi.fn(),
+    reload: vi.fn(),
+    href: '/'
+  };
+});
+
+afterAll(() => {
+  window.location = originalLocation;
+});
+
+// Mock console methods to keep test output clean
+console.error = vi.fn();
+console.warn = vi.fn();
+
+// Add custom test environment properties
+window.matchMedia =
+  window.matchMedia ||
+  function () {
+    return {
+      matches: false,
+      addListener: function () {},
+      removeListener: function () {}
+    };
+  };
 
 // Mock URL constructor
 global.URL = class URL {

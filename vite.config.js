@@ -2,8 +2,6 @@ import { defineConfig } from 'vite';
 import autoprefixer from 'autoprefixer';
 import cssnano from 'cssnano';
 import { resolve } from 'path';
-import { copyFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
-import { join } from 'path';
 import { cspPlugin, copyComponentFiles } from './viteCustomPlugins';
 
 export default defineConfig({

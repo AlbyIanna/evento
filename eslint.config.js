@@ -1,16 +1,31 @@
-import { defineConfig } from 'eslint/config';
+import js from '@eslint/js';
 import globals from 'globals';
-import vitest from 'eslint-plugin-vitest';
+import vitestPlugin from 'eslint-plugin-vitest';
+import prettierConfig from 'eslint-config-prettier';
 
-export default defineConfig([
+export default [
+  js.configs.recommended,
+  prettierConfig,
   {
     ignores: ['dist/**/*']
   },
   {
-    files: ['**/*.{js,mjs,cjs}'],
+    files: ['**/*.js'],
     languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+        ...globals.node
+      }
+    },
+    rules: {
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-undef': 'error',
+      'no-console': ['warn', { allow: ['warn', 'error'] }]
+    }
+  },
+  {
+    files: ['**/*.test.js', '**/test/**/*.js'],
+    languageOptions: {
       globals: {
         ...globals.browser,
         ...globals.node,
@@ -18,38 +33,20 @@ export default defineConfig([
       }
     },
     plugins: {
-      vitest
+      vitest: vitestPlugin
     },
     rules: {
-      // Base rules
-      'no-unused-vars': [
+      'no-unused-vars': 'off',
+      'no-undef': 'off',
+      'vitest/expect-expect': [
         'error',
         {
-          argsIgnorePattern: '^_',
-          varsIgnorePattern: '^_',
-          caughtErrorsIgnorePattern: '^_',
-          ignoreRestSiblings: true
+          assertFunctionNames: ['expect', 'assert*', 'check*', 'test.each', 'testAccessibility']
         }
       ],
-      'no-undef': 'error',
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
-
-      // Best practices
-      'no-useless-catch': 'error',
-      'no-constant-condition': 'error'
-    }
-  },
-  {
-    files: ['**/*.test.js', '**/test/**/*.js', 'viteCustomPlugins/**/*.js'],
-    rules: {
-      'no-unused-vars': 'off',
+      'vitest/no-disabled-tests': 'warn',
+      'vitest/no-focused-tests': 'error',
       'no-console': 'off'
     }
-  },
-  {
-    files: ['vite.config.js'],
-    rules: {
-      'no-unused-vars': 'off'
-    }
   }
-]);
+];

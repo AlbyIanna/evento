@@ -7,6 +7,7 @@ A modern event-sharing application built with Fastify and Vite, designed to make
 - **Simple Event Creation**: Create and customize events with an intuitive form interface
 - **Modern UI**: Clean, responsive interface built with Web Components
 - **No Login, No Data**: The application is designed to be private and secure, with no login required - all event data is encoded in the URL
+- **Accessibility-first design**
 
 ## Documentation
 
@@ -14,6 +15,7 @@ A modern event-sharing application built with Fastify and Vite, designed to make
 - [Getting Started](#getting-started) - Quick start guide
 - [Development](#development) - Development workflow
 - [Contributing](#contributing) - How to contribute
+- [Changelog](CHANGELOG.md) - Detailed version history and changes
 
 ## Getting Started
 
@@ -73,20 +75,182 @@ evento/
 
 - **Frontend**: Vite + Vanilla JavaScript (Web Components)
 - **Backend**: Fastify
-- **Testing**: Vitest
+- **Testing**: Vitest + Testing Library + jest-axe
 - **Build Tools**: Vite, Terser, PostCSS
-- **Code Quality**: ESLint, Prettier
-- **Version Control**: Git with Husky pre-commit hooks
+- **Code Quality**: ESLint, Prettier, Husky
+- **Version Control**: Git with conventional commits
+- **CI/CD**: GitHub Actions + Netlify
+- **Security**: CSP, CORS, Security Headers
+
+## Testing
+
+The project uses Vitest for testing and includes several types of tests:
+
+### Running Tests
+
+- Run all tests: `npm test`
+- Watch mode: `npm run test:watch`
+- UI test runner: `npm run test:ui`
+- Coverage report: `npm run test:coverage`
+
+### Test Structure
+
+```
+src/client/
+├── test/
+│   ├── setup.js         # Global test setup
+│   └── utils.js         # Test utilities
+├── components/
+│   ├── event-form/
+│   │   └── index.test.js
+│   └── event-view/
+│       └── index.test.js
+└── utils/
+    └── eventUtils.test.js
+```
+
+### Writing Tests
+
+Follow these guidelines when writing tests:
+
+1. **Test Organization**
+
+   - Use descriptive test names
+   - Group related tests using `describe` blocks
+   - Follow the Arrange-Act-Assert pattern
+
+2. **Test Coverage**
+   - Aim for 80%+ coverage
+   - Test edge cases and error conditions
+   - Include accessibility tests
+
+Example:
+
+```javascript
+describe('Component', () => {
+  it('should handle the happy path', () => {
+    // Arrange
+    const input = setupTest();
+
+    // Act
+    const result = performAction(input);
+
+    // Assert
+    expect(result).toBe(expected);
+  });
+});
+```
+
+## Code Quality
+
+### Linting and Formatting
+
+- Run linter: `npm run lint`
+- Fix linting issues: `npm run lint:fix`
+- Format code: `npm run format`
+- Check formatting: `npm run format:check`
+
+### Best Practices
+
+1. **Clean Code**
+
+   - Use meaningful variable and function names
+   - Keep functions small and focused
+   - Follow the Single Responsibility Principle
+
+2. **Error Handling**
+
+   - Validate inputs early
+   - Provide meaningful error messages
+   - Use try-catch blocks appropriately
+
+3. **Performance**
+   - Minimize DOM operations
+   - Use efficient data structures
+   - Implement proper caching
+
+## Deployment
+
+The application is deployed using Netlify's native Git integration:
+
+### First-time Setup
+
+1. Install Netlify CLI globally:
+
+```bash
+npm install -g netlify-cli
+```
+
+2. Login to Netlify:
+
+```bash
+netlify login
+```
+
+3. Initialize Netlify in your project:
+
+```bash
+netlify init
+```
+
+This will:
+
+- Link your repository
+- Configure build settings
+- Set up continuous deployment
+- Create preview deployments for PRs
+
+### Development Workflow
+
+1. Local development with Netlify:
+
+```bash
+npm run netlify:dev
+```
+
+2. Test production build:
+
+```bash
+npm run netlify:build
+```
+
+3. Manual deployment (if needed):
+
+```bash
+netlify deploy --prod
+```
+
+4. View deployment status:
+
+```bash
+netlify status
+```
+
+### Deployment Features
+
+- Automatic deployments on push
+- Deploy previews for pull requests
+- Instant rollbacks
+- Branch deploys
+- Build caching
+- SSL/HTTPS
+- CDN distribution
+
+### Environment Variables
+
+Environment variables are managed directly in Netlify's dashboard:
+
+1. Go to Site settings > Build & deploy > Environment
+2. Add variables needed for your deployment
+3. Trigger a new deploy to apply changes
 
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-Please read our [Architecture Documentation](docs/architecture.md) before contributing.
+2. Create a feature branch
+3. Make your changes
+4. Run tests and linting
+5. Submit a pull request
 
 ## License
 

@@ -2,12 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { toHaveNoViolations } from 'jest-axe';
 import fs from 'fs';
 import path from 'path';
-import {
-  loadComponentTemplate,
-  mockTemplateUtils,
-  setupLocationMock,
-  testAccessibility
-} from '../../test/test-utils.js';
+import { setupLocationMock, testAccessibility } from '../../test/test-utils.js';
 
 // Read the actual template file
 const templateContent = fs.readFileSync(path.resolve(__dirname, './template.html'), 'utf8');
