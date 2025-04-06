@@ -246,11 +246,32 @@ Environment variables are managed directly in Netlify's dashboard:
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and linting
-5. Submit a pull request
+### CI/CD Pipeline
+
+The project uses a combination of GitHub Actions and Netlify for a robust CI/CD pipeline:
+
+#### GitHub Actions Checks
+
+- Automated formatting verification
+- ESLint checks
+- Test suite execution
+- Build verification
+
+#### Netlify Integration
+
+- Automatic preview deployments for pull requests
+- Production deployments from main branch
+- Instant rollbacks and branch deploys
+- Build caching and CDN distribution
+
+#### Branch Protection
+
+The `main` branch is protected and requires:
+
+- All CI checks to pass
+- Branch to be up to date
+- Pull request review
+- No direct pushes
 
 ## License
 
