@@ -125,8 +125,9 @@ function showLinkReady(eventData, encodedEvent, isPrivate) {
 /**
  * Fragment grammar. The fragment can carry two '&'-separated things: the
  * event payload (private links) and the organizer key ('org=<64-hex>').
- * Payloads use base64url plus the legacy '+' — never '&' or '=' — so the
- * two segment kinds cannot be confused.
+ * Payloads (base64url, or legacy '+' base64 possibly '='-padded at the
+ * end) never contain '&' and never start with 'org=' — '=' can only be
+ * trailing padding — so the two segment kinds cannot be confused.
  */
 export function parseFragment(hash) {
   let payload = '';
@@ -225,6 +226,9 @@ export function displayEvent(encodedEvent, orgKey = null) {
     // Update event view
     eventView.setEventData(formatForDisplay(eventData));
     toggleContainers(createEventContainer, viewEventContainer, 'view');
+    // A same-document (fragment-only) navigation can land here while the
+    // post-creation screen is still up: hide it too, or both would stack.
+    linkReadyContainer?.classList.add('hidden');
 
     if (eventData.updates) {
       if (orgKey !== null && importChannelSecret(orgKey, eventData.updates)) {

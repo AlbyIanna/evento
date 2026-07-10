@@ -310,6 +310,47 @@ describe('App.js', () => {
     );
   });
 
+  it('should hide the post-creation screen when a fragment navigation opens an event', async () => {
+    setupLocationMock({
+      pathname: '/',
+      href: 'http://localhost/',
+      origin: 'http://localhost',
+      search: ''
+    });
+    cleanupFn = initApp();
+
+    const formData = new Map();
+    formData.set('title', 'Test Event');
+    formData.set('datetime', '2024-01-01T12:00');
+    formData.set('location', 'Test Location');
+    formData.set('description', 'Test Description');
+    document.querySelector('event-form').dispatchEvent(
+      new CustomEvent('submit', {
+        detail: { formData, isEdit: false },
+        bubbles: true,
+        cancelable: true
+      })
+    );
+
+    // The real (here mocked) toggleContainers would have revealed the screen.
+    const linkReadyContainer = document.getElementById('link-ready');
+    linkReadyContainer.classList.remove('hidden');
+
+    // Same-document navigation to a private event link: displayEvent must
+    // hide the post-creation screen, or both screens would stack.
+    setupLocationMock({
+      pathname: '/event',
+      href: 'http://localhost/event#fragment-event',
+      origin: 'http://localhost',
+      search: '',
+      hash: '#fragment-event'
+    });
+    window.dispatchEvent(new Event('hashchange'));
+
+    expect(document.querySelector('event-view').setEventData).toHaveBeenCalled();
+    expect(linkReadyContainer.classList.contains('hidden')).toBe(true);
+  });
+
   it('should load event data from the fragment when URL is /event#payload', async () => {
     setupLocationMock({
       pathname: '/event',
