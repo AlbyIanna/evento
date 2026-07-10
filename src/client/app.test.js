@@ -2,8 +2,16 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { setupLocationMock } from './test/test-utils';
 import { initApp } from './app.js';
 import userEvent from '@testing-library/user-event';
-import { encodeEventData } from './utils/eventUtils.js';
+import { encodeEventData, decodeEventData } from './utils/eventUtils.js';
 import { appState } from './utils/stateManager.js';
+import {
+  generateUpdateChannel,
+  markPendingPublish,
+  peekPendingPublish,
+  clearPendingPublish,
+  publishCurrentVersion,
+  fetchLatestUpdate
+} from './services/updates/updatesService.js';
 
 // --- Mocks for utility modules ---
 vi.mock('./utils/dateUtils.js', () => ({
@@ -24,6 +32,16 @@ vi.mock('./utils/eventUtils.js', () => ({
 
 vi.mock('./utils/formUtils.js', () => ({
   clearErrors: vi.fn()
+}));
+
+vi.mock('./services/updates/updatesService.js', () => ({
+  generateUpdateChannel: vi.fn(() => ({ pk: 'a'.repeat(64), d: 'channel-d' })),
+  ownsChannel: vi.fn(() => true),
+  markPendingPublish: vi.fn(),
+  peekPendingPublish: vi.fn(() => false),
+  clearPendingPublish: vi.fn(),
+  publishCurrentVersion: vi.fn(() => Promise.resolve(true)),
+  fetchLatestUpdate: vi.fn(() => Promise.resolve(null))
 }));
 
 vi.mock('./utils/uiUtils.js', () => ({
@@ -304,5 +322,258 @@ describe('App.js', () => {
     expect(eventForm.setEventData).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Decoded Event' })
     );
+  });
+
+  describe('update channel', () => {
+    const updates = { pk: 'a'.repeat(64), d: 'channel-d' };
+
+    const decodedWithUpdates = {
+      title: 'Decoded Event',
+      start: '2024-01-01T12:00',
+      tz: 'Europe/Rome',
+      location: 'Test Location',
+      description: 'Test Description',
+      status: 'confirmed',
+      updates
+    };
+
+    function submitForm(fields, isEdit = false) {
+      const formData = new Map(Object.entries(fields));
+      const submitEvent = new CustomEvent('submit', {
+        detail: { formData, isEdit },
+        bubbles: true,
+        cancelable: true
+      });
+      document.querySelector('event-form').dispatchEvent(submitEvent);
+    }
+
+    async function enterEditMode(pathname, hash) {
+      setupLocationMock({
+        pathname,
+        href: `http://localhost${pathname}${hash || ''}`,
+        origin: 'http://localhost',
+        search: '?canEdit',
+        hash: hash || ''
+      });
+      cleanupFn = initApp();
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+      // editEvent is async (it awaits fetchLatestUpdate when the channel is
+      // owned), so wait for the form to actually enter edit mode.
+      await vi.waitFor(() =>
+        expect(document.querySelector('event-form').setEditMode).toHaveBeenCalled()
+      );
+    }
+
+    it('should generate an update channel when the updatable option is checked', async () => {
+      setupLocationMock({
+        pathname: '/',
+        href: 'http://localhost/',
+        origin: 'http://localhost',
+        search: ''
+      });
+      cleanupFn = initApp();
+
+      submitForm({
+        title: 'Test Event',
+        datetime: '2024-01-01T12:00',
+        location: 'Test Location',
+        description: 'Test Description',
+        updatable: 'on'
+      });
+
+      expect(generateUpdateChannel).toHaveBeenCalledTimes(1);
+      expect(encodeEventData).toHaveBeenCalledWith(expect.objectContaining({ updates }));
+      expect(markPendingPublish).toHaveBeenCalledWith('encoded-event-data');
+      expect(window.location.href).toBe('http://localhost/event/encoded-event-data?canEdit');
+    });
+
+    it('should preserve the original updates pointer on edit without minting a new channel', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      await enterEditMode('/event/test-event/edit');
+
+      submitForm(
+        {
+          title: 'Moved Event',
+          datetime: '2024-01-02T18:00',
+          location: 'New Location',
+          description: 'Test Description'
+        },
+        true
+      );
+
+      expect(generateUpdateChannel).not.toHaveBeenCalled();
+      expect(encodeEventData).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Moved Event', updates })
+      );
+      expect(markPendingPublish).toHaveBeenCalledWith('encoded-event-data');
+    });
+
+    it('should publish the pending version on the post-create view and not fetch', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      peekPendingPublish.mockReturnValueOnce(true);
+
+      setupLocationMock({
+        pathname: '/event/test-event',
+        href: 'http://localhost/event/test-event',
+        origin: 'http://localhost',
+        search: ''
+      });
+      const eventView = document.querySelector('event-view');
+      eventView.applyUpdate = vi.fn();
+
+      cleanupFn = initApp();
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+
+      await vi.waitFor(() =>
+        expect(publishCurrentVersion).toHaveBeenCalledWith(decodedWithUpdates, 'test-event')
+      );
+      await Promise.resolve();
+      // We just authored this version: clear the gate, and never fetch (a
+      // lagging relay could otherwise echo an older version back onto us).
+      expect(clearPendingPublish).toHaveBeenCalled();
+      expect(fetchLatestUpdate).not.toHaveBeenCalled();
+      expect(eventView.applyUpdate).not.toHaveBeenCalled();
+    });
+
+    it('should warn but keep the gate armed when publishing fails', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      peekPendingPublish.mockReturnValueOnce(true);
+      publishCurrentVersion.mockResolvedValueOnce(false);
+
+      setupLocationMock({
+        pathname: '/event/test-event',
+        href: 'http://localhost/event/test-event',
+        origin: 'http://localhost',
+        search: ''
+      });
+      const eventView = document.querySelector('event-view');
+      eventView.showPublishWarning = vi.fn();
+
+      cleanupFn = initApp();
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+
+      await vi.waitFor(() => expect(eventView.showPublishWarning).toHaveBeenCalled());
+      expect(clearPendingPublish).not.toHaveBeenCalled();
+    });
+
+    it('should apply a newer relay version on an ordinary view', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      fetchLatestUpdate.mockResolvedValueOnce({
+        event: { ...decodedWithUpdates, start: '2024-03-03T20:00' },
+        createdAt: 1700000000,
+        encoded: 'newer-encoded-data'
+      });
+
+      setupLocationMock({
+        pathname: '/event/test-event',
+        href: 'http://localhost/event/test-event',
+        origin: 'http://localhost',
+        search: ''
+      });
+      const eventView = document.querySelector('event-view');
+      eventView.applyUpdate = vi.fn();
+
+      cleanupFn = initApp();
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+
+      await vi.waitFor(() => {
+        expect(eventView.applyUpdate).toHaveBeenCalledWith(
+          expect.objectContaining({
+            start: '2024-03-03T20:00',
+            status: 'confirmed',
+            date: '01/01/2024',
+            time: '12:00 PM'
+          }),
+          'newer-encoded-data'
+        );
+      });
+      expect(publishCurrentVersion).not.toHaveBeenCalled();
+      expect(fetchLatestUpdate).toHaveBeenCalledWith(updates);
+    });
+
+    it('should render the original payload untouched when no newer version is found', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      // Default mocks: nothing pending, fetchLatestUpdate resolves null
+      // (exactly what happens when relays are unreachable)
+
+      setupLocationMock({
+        pathname: '/event/test-event',
+        href: 'http://localhost/event/test-event',
+        origin: 'http://localhost',
+        search: ''
+      });
+      const eventView = document.querySelector('event-view');
+      eventView.applyUpdate = vi.fn();
+
+      cleanupFn = initApp();
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+
+      expect(eventView.setEventData).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Decoded Event' })
+      );
+      await vi.waitFor(() => expect(fetchLatestUpdate).toHaveBeenCalled());
+      await Promise.resolve();
+      expect(publishCurrentVersion).not.toHaveBeenCalled();
+      expect(eventView.applyUpdate).not.toHaveBeenCalled();
+    });
+
+    it('should ignore a relay version identical to the current payload', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      fetchLatestUpdate.mockResolvedValueOnce({
+        event: decodedWithUpdates,
+        createdAt: 1700000000,
+        encoded: 'test-event'
+      });
+
+      setupLocationMock({
+        pathname: '/event/test-event',
+        href: 'http://localhost/event/test-event',
+        origin: 'http://localhost',
+        search: ''
+      });
+      const eventView = document.querySelector('event-view');
+      eventView.applyUpdate = vi.fn();
+
+      cleanupFn = initApp();
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+
+      await vi.waitFor(() => expect(fetchLatestUpdate).toHaveBeenCalled());
+      await Promise.resolve();
+      expect(eventView.applyUpdate).not.toHaveBeenCalled();
+    });
+
+    it('should encode a cancelled payload and navigate on cancel-event', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      await enterEditMode('/event/test-event/edit');
+
+      document.querySelector('event-form').dispatchEvent(new CustomEvent('cancel-event'));
+
+      expect(encodeEventData).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Decoded Event', status: 'cancelled', updates })
+      );
+      expect(markPendingPublish).toHaveBeenCalledWith('encoded-event-data');
+      expect(window.location.href).toBe('http://localhost/event/encoded-event-data?canEdit');
+    });
+
+    it('should keep the fragment carrier when cancelling a private-link event', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      await enterEditMode('/event/edit', '#fragment-event');
+
+      document.querySelector('event-form').dispatchEvent(new CustomEvent('cancel-event'));
+
+      expect(window.location.href).toBe('http://localhost/event?canEdit#encoded-event-data');
+    });
+
+    it('should tell the form about the update channel when entering edit mode', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      const eventForm = document.querySelector('event-form');
+      eventForm.setUpdatableLink = vi.fn();
+      eventForm.setCanCancel = vi.fn();
+
+      await enterEditMode('/event/test-event/edit');
+
+      expect(eventForm.setUpdatableLink).toHaveBeenCalledWith(true);
+      expect(eventForm.setCanCancel).toHaveBeenCalledWith(true);
+    });
   });
 });

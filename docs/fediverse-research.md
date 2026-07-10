@@ -4,7 +4,7 @@
 
 ## Executive summary
 
-- **Il fit elegante esiste, ma è limitato al livello "read-only".** Poiché l'intero evento è codificato nell'URL, Evento può servire — senza alcun database — una rappresentazione ActivityStreams 2.0 dell'evento, un file ICS e markup h-event/schema.org, tutti calcolati al volo decodificando l'URL. Questo rende gli eventi *raggiungibili* dal Fediverso e dai calendari senza tradire "No Login, No Data".
+- **Il fit elegante esiste, ma è limitato al livello "read-only".** Poiché l'intero evento è codificato nell'URL, Evento può servire — senza alcun database — una rappresentazione ActivityStreams 2.0 dell'evento, un file ICS e markup h-event/schema.org, tutti calcolati al volo decodificando l'URL. Questo rende gli eventi _raggiungibili_ dal Fediverso e dai calendari senza tradire "No Login, No Data".
 - **La federazione piena è architettonicamente incompatibile con l'app attuale.** Follower, consegna push, RSVP e inbox richiedono attori persistenti, chiavi di firma, code di consegna e stato lato server: nessun progetto open source leggero (Gathio, Gancio, Mobilizon) federa senza persistenza, e ogni framework serio (Fedify) richiede come minimo un key-value store.
 - **Il beneficio della federazione ActivityPub, per un publisher senza follower, parte da zero.** ActivityPub è push-to-inbox: senza follower, relay o admin che scelgono di seguire l'attore di Evento, gli oggetti pubblicati non raggiungono nessuno. Mastodon, dove sta la maggioranza degli utenti, non rende gli oggetti Event come eventi ma come "titolo + link". Il rapporto costo/beneficio della federazione piena è quindi sfavorevole.
 - **Il valore immediato più alto per riga di codice è nei formati "noiosi":** export ICS generato lato client (libreria `ics`, licenza ISC) e link "aggiungi al calendario", seguiti — con cautele di sicurezza — dal pre-rendering di microformati. L'unica federazione strutturalmente compatibile con l'architettura stateless è un opzionale "pubblica su Nostr" interamente client-side (NIP-52), il cui pubblico però oggi è minuscolo.
@@ -13,13 +13,13 @@
 
 ## Il vincolo di fondo — la tensione tra "No Login, No Data" e la federazione
 
-Evento non ha database, account né storage lato server: l'evento *è* l'URL (JSON codificato in Base64 nel path `/event/<encoded>`), validato lato client e renderizzato nel browser. L'unico componente serverless esistente (l'accorciatore di URL nelle Netlify Functions) è dichiaratamente non persistente.
+Evento non ha database, account né storage lato server: l'evento _è_ l'URL (JSON codificato in Base64 nel path `/event/<encoded>`), validato lato client e renderizzato nel browser. L'unico componente serverless esistente (l'accorciatore di URL nelle Netlify Functions) è dichiaratamente non persistente.
 
 ActivityPub — il protocollo di federazione del Fediverso (raccomandazione W3C dal gennaio 2018) — assume esattamente l'opposto. I suoi requisiti strutturali sono quattro:
 
 1. **ID stabili e dereferenziabili**: ogni oggetto (evento) e ogni attore (chi pubblica) deve avere un URL HTTPS che, interrogato con il content type `application/activity+json`, restituisce l'oggetto in formato JSON-LD.
-2. **Un attore con coppia di chiavi crittografiche**: praticamente tutti i server del Fediverso (Mastodon incluso) richiedono che le richieste in ingresso alla inbox siano firmate con *HTTP Signatures*; le istanze in "authorized fetch" firmano e possono richiedere firme anche sulle GET.
-3. **Una collezione di follower persistente**: la federazione è *push-based* — il server deve ricordare chi lo segue e consegnare le attività firmate alle loro inbox, con retry.
+2. **Un attore con coppia di chiavi crittografiche**: praticamente tutti i server del Fediverso (Mastodon incluso) richiedono che le richieste in ingresso alla inbox siano firmate con _HTTP Signatures_; le istanze in "authorized fetch" firmano e possono richiedere firme anche sulle GET.
+3. **Una collezione di follower persistente**: la federazione è _push-based_ — il server deve ricordare chi lo segue e consegnare le attività firmate alle loro inbox, con retry.
 4. **Una inbox sempre attiva**: per ricevere qualunque cosa (Follow, RSVP, commenti) serve un endpoint che assorbe POST non richiesti dall'intera rete.
 
 Il punto (1) è l'unico che Evento ottiene quasi gratis: dato che l'URL contiene già tutto l'evento, una Netlify Function può restituire l'oggetto AS2 in modo deterministico e stateless. I punti (2)–(4) richiedono invece stato durevole. La chiave di firma può vivere in una variabile d'ambiente (un segreto dell'operatore, non un dato utente: filosoficamente accettabile), ma follower, code di consegna e stato degli RSVP sono un database sotto altro nome. Gli RSVP sono il caso peggiore: le liste dei partecipanti sono dati personali, in contraddizione diretta con "No Data"; accettarli e scartarli renderebbe gli RSVP una menzogna.
@@ -34,29 +34,29 @@ Il resto del report esamina area per area dove passa esattamente questa linea di
 
 ActivityStreams 2.0 (AS2, raccomandazione W3C dal maggio 2017) è il vocabolario dati del Fediverso e definisce un tipo di oggetto `Event` le cui proprietà (`name`, `startTime`/`endTime` in ISO 8601, `location` come oggetto `Place`, `summary`/`content`, `url`, `attributedTo`) mappano quasi 1:1 sul modello di Evento: un evento di Evento può essere espresso senza perdite come documento JSON AS2. AS2 include già anche l'intero vocabolario RSVP (`Invite`, `Join`, `Leave`, `Accept`, `TentativeAccept`, `Reject`, `TentativeReject`). ActivityPub è il trasporto: gli oggetti hanno ID HTTPS stabili, sono pubblicati da attori e consegnati alle inbox altrui.
 
-Il profilo di interoperabilità pratico per gli eventi è **FEP-8a8e** ("A common approach to using the Event object type", CC0-1.0, nel repo `fediverse/fep` su Codeberg). È ancora una **bozza**: secondo l'aggiornamento di giugno 2026 del progetto Event Federation, è in un giro finale di rifinitura basato sulle implementazioni di Gancio, Mobilizon, LAUTI e del plugin WordPress "Event Bridge for ActivityPub", con l'intenzione di marcarla poi FINAL. Punti rilevanti: `endTime` è obbligatorio (con un marcatore esplicito per gli eventi a durata aperta) ed è stata aggiunta una collezione `organizers`. Il pattern di **un unico attore di istanza di tipo Application** (es. `events@istanza.tld`) che pubblica tutti gli eventi — il modello di Gancio — è documentato e discusso nel contesto della FEP, il che significherebbe che account per-utente non sono necessari per federare eventi; *nota: che la FEP stessa "sancisca" formalmente questo pattern non è stato verificabile in fase di fact-checking (le fonti primarie erano irraggiungibili) — è plausibile ma da confermare sul testo della FEP.*
+Il profilo di interoperabilità pratico per gli eventi è **FEP-8a8e** ("A common approach to using the Event object type", CC0-1.0, nel repo `fediverse/fep` su Codeberg). È ancora una **bozza**: secondo l'aggiornamento di giugno 2026 del progetto Event Federation, è in un giro finale di rifinitura basato sulle implementazioni di Gancio, Mobilizon, LAUTI e del plugin WordPress "Event Bridge for ActivityPub", con l'intenzione di marcarla poi FINAL. Punti rilevanti: `endTime` è obbligatorio (con un marcatore esplicito per gli eventi a durata aperta) ed è stata aggiunta una collezione `organizers`. Il pattern di **un unico attore di istanza di tipo Application** (es. `events@istanza.tld`) che pubblica tutti gli eventi — il modello di Gancio — è documentato e discusso nel contesto della FEP, il che significherebbe che account per-utente non sono necessari per federare eventi; _nota: che la FEP stessa "sancisca" formalmente questo pattern non è stato verificabile in fase di fact-checking (le fonti primarie erano irraggiungibili) — è plausibile ma da confermare sul testo della FEP._
 
 La superficie server minima per essere visibili dal Fediverso è: (1) l'evento servito come `application/activity+json` a un ID stabile; (2) un documento attore con chiave pubblica RSA; (3) WebFinger (RFC 7033, l'endpoint `/.well-known/webfinger` che risolve `@events@evento.example` nell'URL dell'attore — la documentazione di Mastodon lo indica come necessario per la piena interoperabilità); (4) HTTP Signatures per qualunque cosa "attiva"; (5) una inbox se si vuole ricevere qualcosa. **Il sottoinsieme read-only (punti 1–3) è realizzabile senza alcun database**, come dimostrano più implementazioni ActivityPub documentate su siti statici (Kinlan, maho.dev, il server single-file di Terence Eden — che però, per supportare i follow, deve già salvare file su disco).
 
-Sul fronte firme: Mastodon richiede firme HTTP (schema draft-cavage) su tutte le consegne alla inbox; il supporto in ricezione a RFC 9421 (HTTP Message Signatures, lo standard IETF del 2024) è arrivato in Mastodon 4.4 dietro feature flag ed è attivo di default dalla 4.5 — *in ricezione*: Mastodon non firma ancora in uscita con RFC 9421, e accetta entrambi gli schemi. La tecnica del "double-knocking" (provare uno schema di firma e ripiegare sull'altro) è la raccomandazione del report SWICG ed è implementata da Fedify — non una caratteristica di Mastodon, come talvolta riportato.
+Sul fronte firme: Mastodon richiede firme HTTP (schema draft-cavage) su tutte le consegne alla inbox; il supporto in ricezione a RFC 9421 (HTTP Message Signatures, lo standard IETF del 2024) è arrivato in Mastodon 4.4 dietro feature flag ed è attivo di default dalla 4.5 — _in ricezione_: Mastodon non firma ancora in uscita con RFC 9421, e accetta entrambi gli schemi. La tecnica del "double-knocking" (provare uno schema di firma e ripiegare sull'altro) è la raccomandazione del report SWICG ed è implementata da Fedify — non una caratteristica di Mastodon, come talvolta riportato.
 
 **Il tetto del beneficio**: Mastodon non ha supporto di prima classe per gli eventi. La sua documentazione classifica `Event` tra i tipi "convertiti": viene mostrato come testo (content o name) con l'URL appeso e il summary come content warning — non come card calendario. Il rendering reale degli eventi esiste solo nell'angolo event-native del Fediverso: Mobilizon, Gancio, Friendica (che importa gli eventi nel calendario dell'utente) e il plugin WordPress; GoToSocial non supporta affatto il tipo Event.
 
 ### Tecnologie
 
-| Tecnologia | Licenza | Maturità |
-|---|---|---|
-| ActivityStreams 2.0 (incl. `as:Event`) | Specifica W3C (royalty-free) | Finale — Recommendation dal 2017 |
-| ActivityPub | Specifica W3C | Finale — Recommendation dal 2018 |
-| WebFinger (RFC 7033) | Standard IETF aperto | Finale (2013); banale da implementare per un singolo attore |
-| HTTP Signatures (draft-cavage / RFC 9421) | IETF | draft-cavage: bozza scaduta ma standard de facto del Fediverso; RFC 9421: finale (2024), adozione in corso |
-| FEP-8a8e | CC0-1.0 | **Bozza attiva**, rifinitura finale a giugno 2026 |
-| Fedify (framework TS) | MIT | Produzione, molto attivo (v2.3.1, giugno 2026) — ma richiede KV store |
-| Mastodon (come consumatore) | AGPL-3.0-only | Produzione — rendering Event solo "convertito" |
+| Tecnologia                                | Licenza                      | Maturità                                                                                                   |
+| ----------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| ActivityStreams 2.0 (incl. `as:Event`)    | Specifica W3C (royalty-free) | Finale — Recommendation dal 2017                                                                           |
+| ActivityPub                               | Specifica W3C                | Finale — Recommendation dal 2018                                                                           |
+| WebFinger (RFC 7033)                      | Standard IETF aperto         | Finale (2013); banale da implementare per un singolo attore                                                |
+| HTTP Signatures (draft-cavage / RFC 9421) | IETF                         | draft-cavage: bozza scaduta ma standard de facto del Fediverso; RFC 9421: finale (2024), adozione in corso |
+| FEP-8a8e                                  | CC0-1.0                      | **Bozza attiva**, rifinitura finale a giugno 2026                                                          |
+| Fedify (framework TS)                     | MIT                          | Produzione, molto attivo (v2.3.1, giugno 2026) — ma richiede KV store                                      |
+| Mastodon (come consumatore)               | AGPL-3.0-only                | Produzione — rendering Event solo "convertito"                                                             |
 
 ### Fit con Evento
 
-C'è un incastro genuinamente elegante: l'URL di Evento può diventare un ID ActivityPub dereferenziabile a costo zero di storage (content negotiation in una Netlify Function). Aggiungendo un attore statico di istanza (chiave in un secret Netlify) e una risposta WebFinger statica, gli eventi diventano *fetchabili*: incollare un link di Evento nella ricerca di Mastodon/Mobilizon/Gancio produrrebbe un oggetto risolvibile, e le piattaforme event-native lo mostrerebbero come vero evento. Caveat anche qui: FEP-8a8e vuole `endTime` obbligatorio (Evento ha un solo datetime: servirebbe una fine o il marcatore open-ended); l'immutabilità è forzata (modificare un evento crea un nuovo URL = nuovo oggetto: le attività `Update` non hanno senso e le copie stantie non si correggono). Tutto ciò che va oltre la fetchabilità — follower, consegna push, RSVP — richiede persistenza ed è un bivio architetturale, non un incremento. Se l'obiettivo è "eventi che la gente mette in calendario", il semplice export ICS rende più valore per riga di codice dell'intera federazione AP.
+C'è un incastro genuinamente elegante: l'URL di Evento può diventare un ID ActivityPub dereferenziabile a costo zero di storage (content negotiation in una Netlify Function). Aggiungendo un attore statico di istanza (chiave in un secret Netlify) e una risposta WebFinger statica, gli eventi diventano _fetchabili_: incollare un link di Evento nella ricerca di Mastodon/Mobilizon/Gancio produrrebbe un oggetto risolvibile, e le piattaforme event-native lo mostrerebbero come vero evento. Caveat anche qui: FEP-8a8e vuole `endTime` obbligatorio (Evento ha un solo datetime: servirebbe una fine o il marcatore open-ended); l'immutabilità è forzata (modificare un evento crea un nuovo URL = nuovo oggetto: le attività `Update` non hanno senso e le copie stantie non si correggono). Tutto ciò che va oltre la fetchabilità — follower, consegna push, RSVP — richiede persistenza ed è un bivio architetturale, non un incremento. Se l'obiettivo è "eventi che la gente mette in calendario", il semplice export ICS rende più valore per riga di codice dell'intera federazione AP.
 
 ---
 
@@ -72,7 +72,7 @@ L'interoperabilità reale è più stretta del marketing: la federazione a piena 
 
 ### Fit con Evento
 
-Evento non può diventare un peer di federazione di Mobilizon senza abbandonare i suoi principi: servono ID persistenti, un attore con WebFinger e chiavi, e stato server-side per follower e flussi Join/Accept. Ciò che Evento *può* fare a basso costo è servire la rappresentazione AS2 dell'evento usando il vocabolario documentato di Mobilizon (schema.org + estensioni), che è il formato de facto degli eventi federati — senza inventare nulla. Nota di licenza: Mobilizon è AGPL, quindi copiarne il codice in un progetto con licenza diversa non è possibile; implementarne il *vocabolario documentato* è invece libero. Un'alternativa pragmatica e interessante: Mobilizon espone un'**API GraphQL con registrazione di applicazioni OAuth2** e scope `write:event:create/update/delete` — un pulsante opt-in "pubblica su un'istanza Mobilizon" delegherebbe a terzi tutta la persistenza e la federazione (vedi sezione serverless).
+Evento non può diventare un peer di federazione di Mobilizon senza abbandonare i suoi principi: servono ID persistenti, un attore con WebFinger e chiavi, e stato server-side per follower e flussi Join/Accept. Ciò che Evento _può_ fare a basso costo è servire la rappresentazione AS2 dell'evento usando il vocabolario documentato di Mobilizon (schema.org + estensioni), che è il formato de facto degli eventi federati — senza inventare nulla. Nota di licenza: Mobilizon è AGPL, quindi copiarne il codice in un progetto con licenza diversa non è possibile; implementarne il _vocabolario documentato_ è invece libero. Un'alternativa pragmatica e interessante: Mobilizon espone un'**API GraphQL con registrazione di applicazioni OAuth2** e scope `write:event:create/update/delete` — un pulsante opt-in "pubblica su un'istanza Mobilizon" delegherebbe a terzi tutta la persistenza e la federazione (vedi sezione serverless).
 
 ---
 
@@ -80,17 +80,17 @@ Evento non può diventare un peer di federazione di Mobilizon senza abbandonare 
 
 ### Panoramica
 
-**Gathio** è filosoficamente il progetto più vicino a Evento: pagine evento "autodistruggenti, condivisibili, senza registrazione" (**GPL-3.0-or-later** — non "only" come inizialmente riportato; TypeScript/Express; ultima release **v1.6.3 del 7 luglio 2025** — la data "2026" circolata era errata di un anno). Ma anche prima di federare, Gathio non è mai stato "no data": salva ogni evento in MongoDB, autorizza le modifiche con una password generata / link segreto (email opzionale) e mitiga la ritenzione **cancellando automaticamente eventi ed email 7 giorni dopo la fine dell'evento**. La sua federazione (FEDERATION.md) rende **ogni evento un attore ActivityPub di prima classe**: URI, inbox/outbox, follower e coppia di chiavi propri; gli utenti del Fediverso *seguono l'evento*; gli RSVP arrivano come risposte a un sondaggio `Question` o come `Accept/Event`; alla scadenza parte un `Delete/Actor` verso i follower. Lezione: Gathio ha mantenuto "no login" intatto anche federando (capability URL, attori per-evento), ma ha pagato la federazione con database, ID stabili, gestione chiavi e inbox sempre attiva — limitando il danno con ritenzione a tempo, non con ritenzione zero.
+**Gathio** è filosoficamente il progetto più vicino a Evento: pagine evento "autodistruggenti, condivisibili, senza registrazione" (**GPL-3.0-or-later** — non "only" come inizialmente riportato; TypeScript/Express; ultima release **v1.6.3 del 7 luglio 2025** — la data "2026" circolata era errata di un anno). Ma anche prima di federare, Gathio non è mai stato "no data": salva ogni evento in MongoDB, autorizza le modifiche con una password generata / link segreto (email opzionale) e mitiga la ritenzione **cancellando automaticamente eventi ed email 7 giorni dopo la fine dell'evento**. La sua federazione (FEDERATION.md) rende **ogni evento un attore ActivityPub di prima classe**: URI, inbox/outbox, follower e coppia di chiavi propri; gli utenti del Fediverso _seguono l'evento_; gli RSVP arrivano come risposte a un sondaggio `Question` o come `Accept/Event`; alla scadenza parte un `Delete/Actor` verso i follower. Lezione: Gathio ha mantenuto "no login" intatto anche federando (capability URL, attori per-evento), ma ha pagato la federazione con database, ID stabili, gestione chiavi e inbox sempre attiva — limitando il danno con ritenzione a tempo, non con ritenzione zero.
 
-**Gancio** (AGPL-3.0, Node/Vue, SQLite di default o MariaDB/PostgreSQL; stabile 1.28.2, 2.0.0-beta.4 del 30 giugno 2026; finanziato NLnet) sceglie la forma ActivityPub più economica: **un solo attore di istanza di tipo Application** (`relay@istanza.tld`) che pubblica ogni evento come oggetto AS2 Event ai follower; dalla v1.9.0 un'istanza può anche *seguire* altri attori Gancio/Mobilizon/WordPress per ingerirne gli eventi; gli eventi federati vengono rimossi dopo la fine. Rilevante per l'etica di Evento: Gancio supporta l'**invio anonimo di eventi (attivo di default)**, con approvazione di un admin/editor e identità del proponente mai mostrata. Ma richiede comunque database, account admin e un processo server persistente.
+**Gancio** (AGPL-3.0, Node/Vue, SQLite di default o MariaDB/PostgreSQL; stabile 1.28.2, 2.0.0-beta.4 del 30 giugno 2026; finanziato NLnet) sceglie la forma ActivityPub più economica: **un solo attore di istanza di tipo Application** (`relay@istanza.tld`) che pubblica ogni evento come oggetto AS2 Event ai follower; dalla v1.9.0 un'istanza può anche _seguire_ altri attori Gancio/Mobilizon/WordPress per ingerirne gli eventi; gli eventi federati vengono rimossi dopo la fine. Rilevante per l'etica di Evento: Gancio supporta l'**invio anonimo di eventi (attivo di default)**, con approvazione di un admin/editor e identità del proponente mai mostrata. Ma richiede comunque database, account admin e un processo server persistente.
 
-Tra i pari: il plugin WordPress **Event Bridge for ActivityPub** (1.0.0, febbraio 2025) innesta la federazione su uno store esistente riusando l'infrastruttura attori del plugin ActivityPub di WordPress; **LAUTI** (AGPL-3.0, Go) sta introducendo nel 2026 una federazione basata, come Gancio, su un singolo attore di istanza; **apevents** (MIT, Rust) è sperimentale; **Friendica** (AGPL-3.0) e **Hubzilla** (MIT) sono utili soprattutto come *consumatori* (calendari integrati).
+Tra i pari: il plugin WordPress **Event Bridge for ActivityPub** (1.0.0, febbraio 2025) innesta la federazione su uno store esistente riusando l'infrastruttura attori del plugin ActivityPub di WordPress; **LAUTI** (AGPL-3.0, Go) sta introducendo nel 2026 una federazione basata, come Gancio, su un singolo attore di istanza; **apevents** (MIT, Rust) è sperimentale; **Friendica** (AGPL-3.0) e **Hubzilla** (MIT) sono utili soprattutto come _consumatori_ (calendari integrati).
 
 **Il pattern trasversale, verificato:** ogni progetto di questa rassegna, incluso il più minimalista, tiene eventi, follower e chiavi HTTP-signature lato server. Nessuno federa da un payload stateless codificato nell'URL.
 
 ### Fit con Evento
 
-I pari dimostrano che **"No Login" è preservabile** (capability URL alla Gathio, invio anonimo alla Gancio) e che il costo privacy è delimitabile (auto-cancellazione a tempo, `Delete/Actor` ai follower). Dimostrano anche che **"No Data" non lo è**, per la federazione attiva. Se un giorno Evento volesse federare davvero, i modelli sono due: quello di Gathio (copia memorizzata, opt-in, a scadenza automatica — ammettendo che *quegli* eventi rinunciano al "No Data") o quello, più economico, di Gancio (un attore, una chiave, eventi come oggetti). In alternativa, delegare: pubblicare su un'istanza Gancio/Gathio esistente via API, restando stateless. Gradiente di licenze se si pensa a riuso di codice: Gathio GPL-3.0-or-later, Gancio e Mobilizon AGPL — obblighi copyleft rilevanti solo in caso di vendoring, non di imitazione del design.
+I pari dimostrano che **"No Login" è preservabile** (capability URL alla Gathio, invio anonimo alla Gancio) e che il costo privacy è delimitabile (auto-cancellazione a tempo, `Delete/Actor` ai follower). Dimostrano anche che **"No Data" non lo è**, per la federazione attiva. Se un giorno Evento volesse federare davvero, i modelli sono due: quello di Gathio (copia memorizzata, opt-in, a scadenza automatica — ammettendo che _quegli_ eventi rinunciano al "No Data") o quello, più economico, di Gancio (un attore, una chiave, eventi come oggetti). In alternativa, delegare: pubblicare su un'istanza Gancio/Gathio esistente via API, restando stateless. Gradiente di licenze se si pensa a riuso di codice: Gathio GPL-3.0-or-later, Gancio e Mobilizon AGPL — obblighi copyleft rilevanti solo in caso di vendoring, non di imitazione del design.
 
 ---
 
@@ -104,7 +104,7 @@ Le alternative sono di fatto morte: **activitypub-express** ("apex", MIT) è fer
 
 ### Fit con Evento
 
-Nessuna libreria rimuove il disallineamento, perché il disallineamento sta nel protocollo, non nel tooling. Adottare Fedify significherebbe aggiungere almeno un KV store esterno e realisticamente una coda — cioè rinunciare a "No Data" a livello server e probabilmente anche a Netlify come piattaforma (i target serverless documentati sono Workers e Deno Deploy). Quello che si può fare *senza* framework è il gradino read-only: servire l'evento come JSON-LD AS2 via content negotiation, decodificato al volo dal Base64 — zero storage, zero dipendenze oltre alla costruzione del JSON.
+Nessuna libreria rimuove il disallineamento, perché il disallineamento sta nel protocollo, non nel tooling. Adottare Fedify significherebbe aggiungere almeno un KV store esterno e realisticamente una coda — cioè rinunciare a "No Data" a livello server e probabilmente anche a Netlify come piattaforma (i target serverless documentati sono Workers e Deno Deploy). Quello che si può fare _senza_ framework è il gradino read-only: servire l'evento come JSON-LD AS2 via content negotiation, decodificato al volo dal Base64 — zero storage, zero dipendenze oltre alla costruzione del JSON.
 
 ---
 
@@ -116,9 +116,9 @@ Questo strato si divide nettamente in due per Evento.
 
 **Gruppo 1 — nessuno stato necessario.** iCalendar (RFC 5545, standard IETF dal 2009, esteso da RFC 7986; MIME `text/calendar`) è la lingua franca dei calendari, consumata da Apple/Google/Outlook/Thunderbird. Un `VEVENT` può essere generato **interamente lato client** dal payload già presente nell'URL e offerto come download Blob ("aggiungi al calendario"): ~50 righe fatte a mano oppure una libreria open source — il pacchetto npm **`ics`** (licenza ISC, v3.12.0 di aprile 2026, uso browser documentato) o **`datebook`** (MIT, TypeScript, genera anche gli URL Google/Yahoo/Outlook). Attenzione al popolare web component **`add-to-calendar-button`**: è **Elastic License 2.0, source-available ma non open source approvato OSI** — in contrasto con la preferenza dichiarata di Evento. Accanto alla via ICS ci sono gli schemi URL dei vendor (Google `calendar/render?action=TEMPLATE`, Outlook `deeplink/compose`): pura costruzione di stringhe client-side a zero dipendenze, ma **non documentati né garantiti ufficialmente dai vendor** — il riferimento de facto è il repo comunitario `InteractionDesignFoundation/add-event-to-calendar-docs`. Un piccolo passo in più: una Netlify Function stateless `/ics/<encoded>` che decodifica e restituisce `text/calendar` abiliterebbe anche i link `webcal://` (schema de facto di origine Apple, non standard IETF) e l'ICS fetchabile da macchine — sempre senza salvare nulla.
 
-**Gruppo 2 — presuppone ciò che Evento non ha.** RSS 2.0 e Atom (RFC 4287) descrivono *collezioni* di entry con ID stabili: Evento non ha alcuna lista di eventi lato server da enumerare, quindi non c'è nulla da mettere in un feed senza introdurre storage. WebSub (raccomandazione W3C 2018, notifiche push di URL che cambiano) è ancora peggio: richiede topic URL mutabili, un hub e sottoscrittori con callback HTTP raggiungibile in rete — un browser non può nemmeno essere sottoscrittore — e gli eventi di Evento sono immutabili per costruzione (modifica = nuovo URL), quindi non esistono "aggiornamenti" da spingere.
+**Gruppo 2 — presuppone ciò che Evento non ha.** RSS 2.0 e Atom (RFC 4287) descrivono _collezioni_ di entry con ID stabili: Evento non ha alcuna lista di eventi lato server da enumerare, quindi non c'è nulla da mettere in un feed senza introdurre storage. WebSub (raccomandazione W3C 2018, notifiche push di URL che cambiano) è ancora peggio: richiede topic URL mutabili, un hub e sottoscrittori con callback HTTP raggiungibile in rete — un browser non può nemmeno essere sottoscrittore — e gli eventi di Evento sono immutabili per costruzione (modifica = nuovo URL), quindi non esistono "aggiornamenti" da spingere.
 
-**In mezzo, e filosoficamente il match migliore: microformats2 h-event.** È una specifica living-draft in pubblico dominio (CC0) che rende *la pagina stessa dell'evento* l'oggetto machine-readable (`p-name`, `dtstart`, `dtend`, `p-location`): niente API, niente storage — pensiero IndieWeb "il tuo URL è il dato", letteralmente il modello di Evento. Il problema è il rendering: Evento costruisce il DOM lato client, e i parser di microformati (come i crawler) leggono l'HTML grezzo **senza eseguire JavaScript** — il markup h-event solo client-side sarebbe invisibile proprio ai consumatori a cui è destinato. Il rimedio stateless è una edge/serverless function che pre-renderizza l'HTML con h-event (e opzionalmente JSON-LD schema.org/Event per i motori di ricerca) decodificando l'URL per-request. Gli RSVP in stile IndieWeb (Webmention, raccomandazione W3C 2017) richiederebbero invece di *ricevere e conservare* menzioni — di nuovo storage, a meno di delegare a un servizio terzo, il che indebolisce la filosofia più che preservarla. Da segnalare anche jsCalendar (RFC 8984, eventi in JSON): concettualmente vicino al payload di Evento, ma con supporto dei consumer molto indietro rispetto a ICS.
+**In mezzo, e filosoficamente il match migliore: microformats2 h-event.** È una specifica living-draft in pubblico dominio (CC0) che rende _la pagina stessa dell'evento_ l'oggetto machine-readable (`p-name`, `dtstart`, `dtend`, `p-location`): niente API, niente storage — pensiero IndieWeb "il tuo URL è il dato", letteralmente il modello di Evento. Il problema è il rendering: Evento costruisce il DOM lato client, e i parser di microformati (come i crawler) leggono l'HTML grezzo **senza eseguire JavaScript** — il markup h-event solo client-side sarebbe invisibile proprio ai consumatori a cui è destinato. Il rimedio stateless è una edge/serverless function che pre-renderizza l'HTML con h-event (e opzionalmente JSON-LD schema.org/Event per i motori di ricerca) decodificando l'URL per-request. Gli RSVP in stile IndieWeb (Webmention, raccomandazione W3C 2017) richiederebbero invece di _ricevere e conservare_ menzioni — di nuovo storage, a meno di delegare a un servizio terzo, il che indebolisce la filosofia più che preservarla. Da segnalare anche jsCalendar (RFC 8984, eventi in JSON): concettualmente vicino al payload di Evento, ma con supporto dei consumer molto indietro rispetto a ICS.
 
 ### Fit con Evento
 
@@ -130,7 +130,7 @@ Questo strato si divide nettamente in due per Evento.
 
 ### Panoramica
 
-**Nostr** inverte il modello: un evento è un JSON firmato con una chiave secp256k1 e pubblicato via WebSocket **direttamente dal browser** verso relay pubblici indipendenti; chiunque può rileggerlo interrogando i relay per filtro, senza rapporti di follow. La specifica **NIP-52 "Calendar Events"** (bozza/opzionale nel repo `nostr-protocol/nips`) definisce i kind *addressable* 31922 (eventi su data), 31923 (eventi su orario, con timestamp Unix e timezone opzionale), 31924 (calendari) e 31925 (RSVP con stato accepted/declined/tentative). Correzione emersa in verifica: **i tag obbligatori sono `d` (identificatore), `title` E `start`** — non solo i primi due. La NIP-52 omette deliberatamente gli eventi ricorrenti. La libreria client standard, **nostr-tools**, è in **pubblico dominio (Unlicense)**, browser-first, con sole dipendenze crittografiche @noble/@scure, attivamente mantenuta (v2.23.9 su npm, 1° luglio 2026). L'adozione reale però è sottile: il client di punta per NIP-52, **Flockstr** (MIT), non ha commit dall'ottobre 2024 — di fatto non mantenuto (il sito flockstr.com risulta ancora raggiungibile ma non è stato verificabile direttamente).
+**Nostr** inverte il modello: un evento è un JSON firmato con una chiave secp256k1 e pubblicato via WebSocket **direttamente dal browser** verso relay pubblici indipendenti; chiunque può rileggerlo interrogando i relay per filtro, senza rapporti di follow. La specifica **NIP-52 "Calendar Events"** (bozza/opzionale nel repo `nostr-protocol/nips`) definisce i kind _addressable_ 31922 (eventi su data), 31923 (eventi su orario, con timestamp Unix e timezone opzionale), 31924 (calendari) e 31925 (RSVP con stato accepted/declined/tentative). Correzione emersa in verifica: **i tag obbligatori sono `d` (identificatore), `title` E `start`** — non solo i primi due. La NIP-52 omette deliberatamente gli eventi ricorrenti. La libreria client standard, **nostr-tools**, è in **pubblico dominio (Unlicense)**, browser-first, con sole dipendenze crittografiche @noble/@scure, attivamente mantenuta (v2.23.9 su npm, 1° luglio 2026). L'adozione reale però è sottile: il client di punta per NIP-52, **Flockstr** (MIT), non ha commit dall'ottobre 2024 — di fatto non mantenuto (il sito flockstr.com risulta ancora raggiungibile ma non è stato verificabile direttamente).
 
 **AT Protocol** (il protocollo di Bluesky; implementazione di riferimento MIT/Apache-2.0, molto attiva) ha come app eventi di riferimento **Smoke Signal** (MIT, riscritta in Rust, su tangled.sh), i cui schemi sono migrati nei lexicon comunitari **`community.lexicon.calendar.event`** e **`.rsvp`** (repo `lexicon-community/lexicon`, MIT, attivo a luglio 2026): `name` e `createdAt` obbligatori, `startsAt`/`endsAt`, `mode` (virtuale/in presenza/ibrido), `status`, `locations` opzionali — un superset pulito dei campi di Evento e un buon riferimento di design anche senza federazione. Il vincolo strutturale, verificato sulla documentazione ufficiale: **scrivere un record richiede un account atproto autenticato** (DID + PDS + OAuth o sessione legacy) — non esiste un percorso di scrittura anonimo — mentre **leggere record pubblici via XRPC non richiede account**.
 
@@ -148,7 +148,7 @@ Il prior art esiste ma è ammonitore. **lesspub** (BSD-2-Clause), ActivityPub se
 
 Sul lato piattaforma, i numeri verificati di Netlify: **Netlify Blobs** (l'unica persistenza nativa) ha oggetti fino a 5 GB, **consistenza eventuale di default** (propagazione ≤60 s, strong consistency opt-in) e **last-write-wins senza controllo di concorrenza** — due Follow che arrivano insieme possono perdersi un follower; le Functions hanno timeout sincroni di 10 s (free) / 26 s (Pro), Background Functions fino a 15 minuti sui piani a crediti, e **non esiste una coda di messaggi durevole nativa** — che è esattamente ciò che la consegna ActivityPub vuole.
 
-Le due vie di **delega** che evitano tutto questo: (a) **Bridgy Fed** (CC0, servizio ospitato attivo) rende un sito seguibile da Mastodon senza codice AP, scoprendo i contenuti via feed RSS/Atom o microformats2 — ma richiederebbe un feed (quindi una collezione persistente) e la reach è "follower del sito", non oggetti Event strutturati; (b) un **bot su un'istanza Mobilizon** via API GraphQL (app OAuth2 con scope `write:event:*`): una Netlify Function pubblica l'evento opt-in su Mobilizon, che diventa un vero AS2 Event federato in tutto l'ecosistema, con zero plumbing di protocollo in Evento — al costo di un'identità bot, della dipendenza dalle policy dell'istanza, e della persistenza dell'evento su un server terzo (un confine di *consenso*, non una violazione architetturale, purché detto chiaramente all'utente).
+Le due vie di **delega** che evitano tutto questo: (a) **Bridgy Fed** (CC0, servizio ospitato attivo) rende un sito seguibile da Mastodon senza codice AP, scoprendo i contenuti via feed RSS/Atom o microformats2 — ma richiederebbe un feed (quindi una collezione persistente) e la reach è "follower del sito", non oggetti Event strutturati; (b) un **bot su un'istanza Mobilizon** via API GraphQL (app OAuth2 con scope `write:event:*`): una Netlify Function pubblica l'evento opt-in su Mobilizon, che diventa un vero AS2 Event federato in tutto l'ecosistema, con zero plumbing di protocollo in Evento — al costo di un'identità bot, della dipendenza dalle policy dell'istanza, e della persistenza dell'evento su un server terzo (un confine di _consenso_, non una violazione architetturale, purché detto chiaramente all'utente).
 
 ### Fit con Evento
 
@@ -168,7 +168,7 @@ Per gli eventi in particolare, i canali di ingestione sono curati da umani: **Ga
 
 ### Fit con Evento
 
-Per ActivityPub, **il killer è la scoperta, non l'emissione**: senza follower/relay/admin che seguono, un Evento federante emetterebbe oggetti nel vuoto, e ottenere reach diversa da zero richiede tutto lo stato persistente più *lavoro sociale per-community* che il modello anonimo di Evento non può fare. Questo sposta la federazione AP piena da "beneficio modesto" a "beneficio quasi nullo a costo architetturale alto". La superficie di scoperta realistica di Evento resta la ricerca web ordinaria — che è esattamente ciò che alimentano h-event e JSON-LD schema.org. *(Nota: quest'area e la successiva non hanno passato un giro di fact-checking formale nei dati di ricerca; i punti fattuali chiave — flag `indexable` in 4.2, ricerca globale Mobilizon, follow fidato di Gancio — sono citati dalle fonti elencate ma vanno trattati con un grado di fiducia leggermente inferiore alle aree verificate.)*
+Per ActivityPub, **il killer è la scoperta, non l'emissione**: senza follower/relay/admin che seguono, un Evento federante emetterebbe oggetti nel vuoto, e ottenere reach diversa da zero richiede tutto lo stato persistente più _lavoro sociale per-community_ che il modello anonimo di Evento non può fare. Questo sposta la federazione AP piena da "beneficio modesto" a "beneficio quasi nullo a costo architetturale alto". La superficie di scoperta realistica di Evento resta la ricerca web ordinaria — che è esattamente ciò che alimentano h-event e JSON-LD schema.org. _(Nota: quest'area e la successiva non hanno passato un giro di fact-checking formale nei dati di ricerca; i punti fattuali chiave — flag `indexable` in 4.2, ricerca globale Mobilizon, follow fidato di Gancio — sono citati dalle fonti elencate ma vanno trattati con un grado di fiducia leggermente inferiore alle aree verificate.)_
 
 ---
 
@@ -186,25 +186,25 @@ Infine il costo operativo di una **inbox aperta su Netlify Functions**: ogni con
 
 ## Tabella comparativa
 
-| Tecnologia / approccio | Licenza | Maturità | Complessità di adozione | Compatibilità con l'architettura attuale |
-|---|---|---|---|---|
-| Export ICS client-side (lib `ics`) | ISC (lib); RFC 5545 standard aperto | Finale/attiva (v3.12.0, 04/2026) | Molto bassa | **Piena** — zero server, zero dati |
-| `datebook` (ICS + link vendor) | MIT | Attiva | Molto bassa | **Piena** |
-| `add-to-calendar-button` | **Elastic-2.0 (non OSI)** | Attiva | Bassa | Piena tecnicamente, **in conflitto con la preferenza open source** |
-| Link "aggiungi a Google/Outlook" | Proprietari, non documentati ufficialmente | De facto stabili, non garantiti | Molto bassa | Piena (ma silos vendor) |
-| Endpoint stateless `/ics/<encoded>` + `webcal://` | — | Pattern consolidato | Bassa | Alta — nessuno storage; rischio reputazione da valutare |
-| h-event + JSON-LD via pre-rendering edge | CC0 (spec) | Living draft stabile | Media | Alta — stateless, ma introduce rendering server di contenuto utente (rischio abuso) |
-| AS2 Event via content negotiation + attore statico + WebFinger | Spec W3C/IETF | Finale (spec); pattern dimostrato su siti statici | Media | Alta — read-only, chiave in env var, zero DB |
-| FEP-8a8e (profilo eventi) | CC0-1.0 | **Bozza** (rifinitura finale, 06/2026) | Media (vincolo endTime) | Alta come formato target read-only |
-| Fedify (federazione piena) | MIT | Produzione, molto attiva | Alta | **Bassa** — richiede KV store (+ coda); Netlify non è target documentato |
-| activitypub-express / activity-kit | MIT | **Ferme dal 2024 / 2023** | Alta | Molto bassa — richiedono MongoDB, non mantenute |
-| Nostr NIP-52 via nostr-tools (client-side) | Unlicense (lib); NIP bozza | Lib attiva; ecosistema client debole (Flockstr fermo da 10/2024) | Bassa | **Alta lato Evento** — ma dati persistono su relay terzi; pubblico minimo |
-| AT Protocol / lexicon `community.lexicon.calendar.*` | MIT / MIT+Apache-2.0 | Attivi | Alta (scrittura) | **Bassa per pubblicare** (account obbligatorio); ok read-only |
-| Delega: bot su istanza Mobilizon (GraphQL OAuth2) | Mobilizon AGPL-3.0 | Attiva (5.2.4, 06/2026, Kaihuri) | Media | Media-alta — un secret, zero protocollo; evento persistito da terzi (opt-in esplicito) |
-| Delega: Bridgy Fed | CC0 | Servizio attivo | Bassa-media | Media — richiede però un feed (collezione persistente) |
-| Modello Gathio (evento = attore, auto-expiry) | GPL-3.0-or-later | Attiva (v1.6.3, 07/2025) | Alta | **Bassa** — richiede database; preserva solo "No Login" |
-| Modello Gancio (singolo attore d'istanza) | AGPL-3.0 | Attiva (1.28.2; 2.0 beta 06/2026) | Alta | **Bassa** — DB e processo persistente |
-| RSS/Atom, WebSub, Webmention-RSVP | Standard aperti | Finali | — | **Incompatibili** senza collezioni/stato persistenti |
+| Tecnologia / approccio                                         | Licenza                                    | Maturità                                                         | Complessità di adozione | Compatibilità con l'architettura attuale                                               |
+| -------------------------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------- |
+| Export ICS client-side (lib `ics`)                             | ISC (lib); RFC 5545 standard aperto        | Finale/attiva (v3.12.0, 04/2026)                                 | Molto bassa             | **Piena** — zero server, zero dati                                                     |
+| `datebook` (ICS + link vendor)                                 | MIT                                        | Attiva                                                           | Molto bassa             | **Piena**                                                                              |
+| `add-to-calendar-button`                                       | **Elastic-2.0 (non OSI)**                  | Attiva                                                           | Bassa                   | Piena tecnicamente, **in conflitto con la preferenza open source**                     |
+| Link "aggiungi a Google/Outlook"                               | Proprietari, non documentati ufficialmente | De facto stabili, non garantiti                                  | Molto bassa             | Piena (ma silos vendor)                                                                |
+| Endpoint stateless `/ics/<encoded>` + `webcal://`              | —                                          | Pattern consolidato                                              | Bassa                   | Alta — nessuno storage; rischio reputazione da valutare                                |
+| h-event + JSON-LD via pre-rendering edge                       | CC0 (spec)                                 | Living draft stabile                                             | Media                   | Alta — stateless, ma introduce rendering server di contenuto utente (rischio abuso)    |
+| AS2 Event via content negotiation + attore statico + WebFinger | Spec W3C/IETF                              | Finale (spec); pattern dimostrato su siti statici                | Media                   | Alta — read-only, chiave in env var, zero DB                                           |
+| FEP-8a8e (profilo eventi)                                      | CC0-1.0                                    | **Bozza** (rifinitura finale, 06/2026)                           | Media (vincolo endTime) | Alta come formato target read-only                                                     |
+| Fedify (federazione piena)                                     | MIT                                        | Produzione, molto attiva                                         | Alta                    | **Bassa** — richiede KV store (+ coda); Netlify non è target documentato               |
+| activitypub-express / activity-kit                             | MIT                                        | **Ferme dal 2024 / 2023**                                        | Alta                    | Molto bassa — richiedono MongoDB, non mantenute                                        |
+| Nostr NIP-52 via nostr-tools (client-side)                     | Unlicense (lib); NIP bozza                 | Lib attiva; ecosistema client debole (Flockstr fermo da 10/2024) | Bassa                   | **Alta lato Evento** — ma dati persistono su relay terzi; pubblico minimo              |
+| AT Protocol / lexicon `community.lexicon.calendar.*`           | MIT / MIT+Apache-2.0                       | Attivi                                                           | Alta (scrittura)        | **Bassa per pubblicare** (account obbligatorio); ok read-only                          |
+| Delega: bot su istanza Mobilizon (GraphQL OAuth2)              | Mobilizon AGPL-3.0                         | Attiva (5.2.4, 06/2026, Kaihuri)                                 | Media                   | Media-alta — un secret, zero protocollo; evento persistito da terzi (opt-in esplicito) |
+| Delega: Bridgy Fed                                             | CC0                                        | Servizio attivo                                                  | Bassa-media             | Media — richiede però un feed (collezione persistente)                                 |
+| Modello Gathio (evento = attore, auto-expiry)                  | GPL-3.0-or-later                           | Attiva (v1.6.3, 07/2025)                                         | Alta                    | **Bassa** — richiede database; preserva solo "No Login"                                |
+| Modello Gancio (singolo attore d'istanza)                      | AGPL-3.0                                   | Attiva (1.28.2; 2.0 beta 06/2026)                                | Alta                    | **Bassa** — DB e processo persistente                                                  |
+| RSS/Atom, WebSub, Webmention-RSVP                              | Standard aperti                            | Finali                                                           | —                       | **Incompatibili** senza collezioni/stato persistenti                                   |
 
 ---
 
@@ -225,7 +225,7 @@ Infine il costo operativo di una **inbox aperta su Netlify Functions**: ogni con
 
 ### Lungo termine — federazione piena, e cosa comporterebbe davvero
 
-8. **Trattare la federazione piena come un bivio, non un incremento.** Diventare seguibili e spingere eventi nelle timeline richiede: follower persistenti, code di consegna con retry, inbox sempre attiva con verifica firme (fetch delle chiavi remote non cacheabile senza storage), doveri di moderazione, e l'esposizione al rischio di defederazione via blocklist condivise — il tutto per una reach che *parte da zero* e cresce solo con lavoro sociale per-community che il modello anonimo di Evento non può svolgere. Tecnicamente significherebbe Fedify (MIT, l'unica opzione mantenuta; esiste `@fedify/fastify`) più un KV store e una coda, e realisticamente una migrazione da Netlify verso Cloudflare Workers o Deno Deploy. Il prior art serverless (lesspub, Wildebeest) è tutto abbandonato.
+8. **Trattare la federazione piena come un bivio, non un incremento.** Diventare seguibili e spingere eventi nelle timeline richiede: follower persistenti, code di consegna con retry, inbox sempre attiva con verifica firme (fetch delle chiavi remote non cacheabile senza storage), doveri di moderazione, e l'esposizione al rischio di defederazione via blocklist condivise — il tutto per una reach che _parte da zero_ e cresce solo con lavoro sociale per-community che il modello anonimo di Evento non può svolgere. Tecnicamente significherebbe Fedify (MIT, l'unica opzione mantenuta; esiste `@fedify/fastify`) più un KV store e una coda, e realisticamente una migrazione da Netlify verso Cloudflare Workers o Deno Deploy. Il prior art serverless (lesspub, Wildebeest) è tutto abbandonato.
 9. **Se la domanda degli utenti per la federazione si materializzasse, preferire la delega alla self-federation**: un pulsante opt-in "pubblica nel Fediverso" che posta l'evento su un'istanza Mobilizon tramite bot OAuth2 (scope `write:event:*`) o su un'istanza Gancio — reach federata reale, un solo segreto da gestire, zero codice di protocollo, con l'utente informato che quell'evento viene persistito su un server terzo (confine di consenso, non violazione architetturale).
 10. **Se invece si scegliesse la self-federation**, i modelli da copiare sono noti: quello di Gancio (un attore, una chiave, database minimo) o quello di Gathio (eventi opt-in memorizzati con auto-cancellazione 7 giorni dopo la fine e `Delete/Actor` ai follower) — entrambi dimostrano che **"No Login" può sopravvivere alla federazione** (capability URL, invio anonimo), ma nessuno dei due preserva "No Data". In ogni caso: **publish-only** — nessuna inbox aperta, o una inbox che risponde 202 e scarta, per non pagare per sempre le tempeste di `Delete` del Fediverso su fatturazione per-invocazione senza cap. RSVP federati: da escludere finché la filosofia regge — sono per definizione dati personali memorizzati.
 
@@ -234,6 +234,7 @@ Infine il costo operativo di una **inbox aperta su Netlify Functions**: ogni con
 ## Fonti
 
 **Specifiche e standard**
+
 - https://www.w3.org/TR/activitystreams-vocabulary/
 - https://www.w3.org/TR/activitystreams-core/
 - https://www.w3.org/TR/activitypub/
@@ -252,6 +253,7 @@ Infine il costo operativo di una **inbox aperta su Netlify Functions**: ogni con
 - https://en.wikipedia.org/wiki/WebSub
 
 **FEP-8a8e / Event Federation**
+
 - https://event-federation.eu/2026/06/19/process-on-feps/
 - https://event-federation.eu/2025/04/23/progress-on-the-fep-for-event-objects/
 - https://event-federation.eu/2025/01/02/the-latest-additions-to-fep-8a8e-a-common-approach-to-using-the-event-object-type/
@@ -262,6 +264,7 @@ Infine il costo operativo di una **inbox aperta su Netlify Functions**: ogni con
 - https://socialhub.activitypub.rocks/t/events-interoperability-validation-minimum-requirements-common-extensions/3849
 
 **Mastodon**
+
 - https://docs.joinmastodon.org/spec/activitypub/
 - https://docs.joinmastodon.org/spec/security/
 - https://docs.joinmastodon.org/spec/webfinger/
@@ -281,6 +284,7 @@ Infine il costo operativo di una **inbox aperta su Netlify Functions**: ogni con
 - https://simonwillison.net/2024/Jun/4/how-do-i-opt-into-full-text-search-on-mastodon/
 
 **Mobilizon**
+
 - https://docs.mobilizon.org/5.%20Interoperability/1.activity_pub/
 - https://docs.mobilizon.org/5.%20Interoperability/3.graphql_api/
 - https://docs.mobilizon.org/3.%20System%20administration/configure/global_search/
@@ -302,6 +306,7 @@ Infine il costo operativo di una **inbox aperta su Netlify Functions**: ogni con
 - https://socialhub.activitypub.rocks/t/how-to-represent-places-in-an-event/413
 
 **Gathio, Gancio e affini**
+
 - https://github.com/lowercasename/gathio
 - https://github.com/lowercasename/gathio/releases/tag/v1.6.3
 - https://raw.githubusercontent.com/lowercasename/gathio/main/FEDERATION.md
@@ -322,6 +327,7 @@ Infine il costo operativo di una **inbox aperta su Netlify Functions**: ogni con
 - https://codeberg.org/fediverse/delightful-fediverse-experience
 
 **Librerie e framework JS/AP**
+
 - https://github.com/fedify-dev/fedify
 - https://fedify.dev/
 - https://www.npmjs.com/package/@fedify/fedify
@@ -340,12 +346,14 @@ Infine il costo operativo di una **inbox aperta su Netlify Functions**: ogni con
 - https://socialhub.activitypub.rocks/t/implementing-activitypub-on-netlify-using-serverless-functions/836
 
 **Calendari e microformati**
+
 - https://github.com/adamgibbons/ics
 - https://github.com/jshor/datebook
 - https://github.com/add2cal/add-to-calendar-button
 - https://github.com/InteractionDesignFoundation/add-event-to-calendar-docs/blob/main/services/google.md
 
 **Nostr e AT Protocol**
+
 - https://github.com/nostr-protocol/nips/blob/master/52.md
 - https://github.com/nbd-wtf/nostr-tools
 - https://registry.npmjs.org/nostr-tools
@@ -363,6 +371,7 @@ Infine il costo operativo di una **inbox aperta su Netlify Functions**: ogni con
 - https://atprotocol.dev/tech-talk-smoke-signal-events/
 
 **Serverless, prior art e delega**
+
 - https://paul.kinlan.me/adding-activity-pub-to-your-static-site/
 - https://maho.dev/2024/02/a-guide-to-implementing-activitypub-in-a-static-site-or-any-website-part-3/
 - https://shkspr.mobi/blog/2024/02/activitypub-server-in-a-single-file/
@@ -379,12 +388,14 @@ Infine il costo operativo di una **inbox aperta su Netlify Functions**: ogni con
 - https://answers.netlify.com/t/functions-abuse-prevention/17814
 
 **Scoperta e reach**
+
 - https://fedi.tips/using-relays-to-quickly-expand-a-servers-view-of-the-fediverse/
 - https://dustinrue.com/2023/01/adding-relays-to-your-mastodon-instance/
 - https://www.zwilnik.com/better-social-media/activitypub-conference-2019/decentralised-hashtag-search-and-subscription-in-federated-social-networks/
 - https://relay.fedi.buzz/
 
 **Abuso e reputazione**
+
 - https://fedi.tips/how-to-defederate-fediblock-a-server-on-mastodon/
 - https://github.com/eigenmagic/fediblockhole
 - https://github.com/irubnich/fediblock-importer

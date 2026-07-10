@@ -10,6 +10,7 @@ A modern event-sharing application built with Fastify and Vite, designed to make
 - **Add to Calendar**: One-tap ICS download (timezone-correct) and Google Calendar link
 - **Link previews**: Shared links show a title/date/location card in chats (path-carried events)
 - **Private links**: Optional fragment-carried links that never reach any server - no logs, no preview card
+- **Updatable links**: Opt-in — the creator's browser keeps a signing key so they can push a time change or cancellation to everyone who already has the link, via public Nostr relays (device-bound key, no recovery; updates are publicly readable on relays)
 - **Accessibility-first design**
 
 ## Documentation

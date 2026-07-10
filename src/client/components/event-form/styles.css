@@ -105,6 +105,15 @@ button:disabled {
   color: #6c757d;
 }
 
+.field-warning {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: #856404;
+  background-color: rgba(255, 193, 7, 0.15);
+  border-radius: 4px;
+}
+
 /* Validation styles */
 .field-error {
   color: #dc3545;
@@ -179,6 +188,14 @@ button:disabled {
 
 .save-button:hover {
   background-color: var(--primary-color-dark, #388e3c);
+}
+
+.danger-button {
+  background-color: #dc3545;
+}
+
+.danger-button:hover {
+  background-color: #b02a37;
 }
 
 .cancel-button {

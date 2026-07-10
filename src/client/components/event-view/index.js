@@ -34,9 +34,12 @@ export class EventView extends BaseComponent {
     await this.loadTemplate('/components/event-view/template.html');
     this.#setupButtons();
 
-    // Update the display if we have event data
+    // Update the display if data arrived before the template did (the common
+    // case on first load). Surface the banner too, so a cancellation carried
+    // in the payload isn't missed when setEventData raced ahead of render.
     if (this.#eventData) {
       this.#updateDom(this.#eventData);
+      this.#showBanner(this.#eventData.status === 'cancelled' ? 'cancelled' : 'none');
     }
   }
 
@@ -136,7 +139,53 @@ export class EventView extends BaseComponent {
     // If shadowRoot is ready, update the DOM
     if (this.shadowRoot.innerHTML) {
       this.#updateDom(eventData);
+      // A fresh event owns the banner: reset it, but surface a cancellation
+      // that is already in the payload itself (not only relay-delivered ones).
+      this.#showBanner(eventData.status === 'cancelled' ? 'cancelled' : 'none');
     }
+  }
+
+  // Applies a newer signed version fetched from relays. `encoded` is the new
+  // payload, so the /ics fallback and re-shares reflect the updated event.
+  applyUpdate(formattedEventData, encoded) {
+    this.#eventData = formattedEventData;
+    // Only path-carried (public) events have a server payload to point at;
+    // private events keep #encodedEvent null so nothing hits the server.
+    if (encoded && this.#encodedEvent) {
+      this.#encodedEvent = encoded;
+    }
+    this.#updateDom(formattedEventData);
+    this.#showBanner(formattedEventData.status === 'cancelled' ? 'cancelled' : 'updated');
+  }
+
+  // Banner is owned here, never by #updateDom, so ordinary re-renders (e.g.
+  // the currentView subscription) can't wipe or resurrect it.
+  #showBanner(kind) {
+    const banner = this.$('#update-banner');
+    const bannerText = this.$('#update-banner-text');
+    const title = this.$('#event-title');
+    if (!banner || !bannerText) return;
+
+    const cancelled = kind === 'cancelled';
+    banner.classList.toggle('cancelled', cancelled);
+    if (title) title.classList.toggle('cancelled', cancelled);
+
+    if (kind === 'none') {
+      banner.classList.add('hidden');
+      bannerText.textContent = '';
+      return;
+    }
+    // Unhide before writing the text so the aria-live region announces it.
+    banner.classList.remove('hidden');
+    bannerText.textContent = cancelled
+      ? 'This event was cancelled by the organizer.'
+      : 'This event was updated by the organizer — showing the latest version.';
+  }
+
+  // Tells the organizer their just-made change didn't reach any relay yet.
+  showPublishWarning() {
+    const warning = this.$('#publish-warning');
+    if (warning) warning.classList.remove('hidden');
   }
 
   #updateDom(eventData) {
@@ -177,6 +226,9 @@ export class EventView extends BaseComponent {
 
     calendarButton.classList.add('hidden');
     gcalButton.classList.add('hidden');
+
+    // A cancelled event has nothing to add to a calendar.
+    if (eventData && eventData.status === 'cancelled') return;
 
     const start = eventData && (eventData.start || eventData.datetime);
     if (!start) return;
