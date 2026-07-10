@@ -1,17 +1,5 @@
 import { vi } from 'vitest';
 import { axe } from 'jest-axe';
-import fs from 'fs';
-import path from 'path';
-
-/**
- * Loads a template file from a component directory
- * @param {string} componentDir - The component directory path
- * @param {string} templateFile - The template file name (e.g., 'template.html')
- * @returns {string} The template content
- */
-export function loadComponentTemplate(componentDir, templateFile) {
-  return fs.readFileSync(path.resolve(componentDir, templateFile), 'utf8');
-}
 
 /**
  * Setup for the window.location mock
