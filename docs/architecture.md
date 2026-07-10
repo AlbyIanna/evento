@@ -54,11 +54,14 @@ src/client/
 
 ```
 src/
-├── server.js           # Fastify server setup
-└── test/              # Server-side tests
-    ├── setup.js       # Test environment setup
+├── server.js           # Self-hostable Fastify instance
+├── server.test.js      # Wiring tests (fastify.inject)
+└── test/              # Test environment setup
+    ├── setup.js
     └── shadow-dom-utils.js # Shadow DOM testing utilities
 ```
+
+`src/server.js` is a complete self-hostable instance (`npm run build && npm start`): it serves the built SPA from `dist/` and replicates the stateless projections of the Netlify deployment — `/ics/<payload>` calendar downloads and envelope-only Open Graph cards for link-preview bots — reusing the same `src/shared` modules. In line with the zero-data principle, per-request logging is disabled and error logs never include URLs, since path-carried event payloads travel in them. There is no CORS layer (the service exposes no cross-origin API) and the CSP mirrors the one the build stamps into `index.html`.
 
 ### Shared Format & Serverless Projections
 
@@ -163,6 +166,7 @@ netlify/
    ```
    Private events carry the payload in the URL fragment (`/event#<payload>`),
    which never reaches any server: no logs, no card, no projections.
+   Self-hosted instances serve the same projections from `src/server.js`.
 
 ## Security Features
 
@@ -179,10 +183,9 @@ netlify/
    - XSS prevention
    - Data sanitization
 
-3. **CORS Configuration**
-   - Production-specific origins
-   - Development flexibility
-   - Method restrictions
+3. **Same-Origin by Default**
+   - No CORS layer: the service exposes no cross-origin API
+   - The browser's same-origin policy is the intended default
 
 ## Performance Optimizations
 

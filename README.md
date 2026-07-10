@@ -71,7 +71,7 @@ evento/
 ├── src/            # Source code
 │   ├── client/     # Frontend application
 │   ├── shared/     # Wire-format modules (encode/decode, ICS, preview card)
-│   └── server.js   # Backend server
+│   └── server.js   # Self-hostable server (SPA + /ics + OG previews)
 ├── netlify/        # Serverless projections
 │   ├── functions/  # /ics/<payload> → text/calendar, health
 │   └── edge-functions/ # Open Graph preview cards for link-preview bots
@@ -179,7 +179,22 @@ describe('Component', () => {
 
 ## Deployment
 
-The application is deployed using Netlify's native Git integration:
+Self-hosting is first class: the whole instance is a single Node process. The Netlify setup below is the projection used by the reference deployment.
+
+### Self-hosting
+
+```bash
+npm run build
+npm start
+```
+
+`src/server.js` serves the built SPA from `dist/` and the same stateless projections as the hosted instance: `/ics/<payload>` calendar downloads and Open Graph preview cards for link-preview bots. Set `PORT` to change the port (default 3000).
+
+By design the server keeps no data about your guests: request logging is disabled, so event payloads (which travel in URLs) and referrers never end up in logs.
+
+### Netlify
+
+The reference instance is deployed using Netlify's native Git integration:
 
 ### First-time Setup
 
