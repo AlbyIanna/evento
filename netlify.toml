@@ -17,6 +17,11 @@
   command = "npm run build"
 
 [[redirects]]
+  from = "/ics/*"
+  to = "/.netlify/functions/ics/:splat"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

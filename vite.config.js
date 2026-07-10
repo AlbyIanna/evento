@@ -47,7 +47,16 @@ export default defineConfig({
     cspPlugin({
       'default-src': ["'self'"],
       'style-src': ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
-      'font-src': ["'self'", 'https://cdnjs.cloudflare.com']
+      'font-src': ["'self'", 'https://cdnjs.cloudflare.com'],
+      // Update channel WebSockets. 'wss:' must stay a scheme wildcard
+      // because the relay list is user-configurable (localStorage
+      // 'evento.relays'); the plaintext localhost relay is for the e2e
+      // test harness only and is dropped from production builds.
+      'connect-src': [
+        "'self'",
+        'wss:',
+        ...(process.env.NODE_ENV === 'production' ? [] : ['ws://localhost:8899'])
+      ]
     })
   ],
   sourcemap: process.env.NODE_ENV === 'production' ? 'hidden' : true,
@@ -79,11 +88,11 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./test/setup.js'],
-    include: ['./**/*.test.js'],
+    include: ['./**/*.test.js', '../shared/**/*.test.js'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['./**/*.js'],
+      include: ['./**/*.js', '../shared/**/*.js'],
       exclude: ['./test/**']
     }
   }

@@ -12,6 +12,9 @@ import {
 export class EventForm extends BaseComponent {
   #isEditMode = false;
   #eventData = null;
+  #privateLink = false;
+  #updatableLink = false;
+  #canCancel = false;
 
   constructor() {
     super();
@@ -50,6 +53,8 @@ export class EventForm extends BaseComponent {
     const createButton = this.$('#create-button');
     const updateButton = this.$('#update-button');
     const cancelButton = this.$('#cancel-button');
+    const cancelEventButton = this.$('#cancel-event-button');
+    const updatableCheckbox = this.$('#updatable');
     const buttonContainer = this.$('.button-container');
 
     if (this.#isEditMode) {
@@ -58,12 +63,18 @@ export class EventForm extends BaseComponent {
       updateButton.classList.remove('hidden');
       cancelButton.classList.remove('hidden');
       buttonContainer.classList.add('edit-buttons');
+      // The update channel cannot be granted retroactively to old-link
+      // holders nor revoked from payloads people already have
+      if (updatableCheckbox) updatableCheckbox.disabled = true;
+      if (cancelEventButton) cancelEventButton.classList.toggle('hidden', !this.#canCancel);
     } else {
       // Set create mode UI
       createButton.classList.remove('hidden');
       updateButton.classList.add('hidden');
       cancelButton.classList.add('hidden');
       buttonContainer.classList.remove('edit-buttons');
+      if (updatableCheckbox) updatableCheckbox.disabled = false;
+      if (cancelEventButton) cancelEventButton.classList.add('hidden');
     }
   }
 
@@ -74,6 +85,10 @@ export class EventForm extends BaseComponent {
     // Set up input validation
     const inputs = this.$$('input, textarea');
     inputs.forEach(input => {
+      // The private-link checkbox has no error element (its describedby is a
+      // hint), so keep it out of the validation wiring
+      if (input.type === 'checkbox') return;
+
       this.listen(input, 'input', () => {
         this.validateInput(input);
         this.updateValidationSummary();
@@ -84,8 +99,10 @@ export class EventForm extends BaseComponent {
         this.updateValidationSummary();
       });
 
-      if (input.id === 'datetime') {
-        // Get the next 9pm date/time
+      if (input.id === 'datetime' && !input.value) {
+        // Default to the next 9pm, but never clobber a value already
+        // filled in (e.g. by edit mode, whose fillForm can run first
+        // because the template loads asynchronously)
         input.value = getNext9PM();
       }
     });
@@ -94,10 +111,32 @@ export class EventForm extends BaseComponent {
     if (cancelButton) {
       const path = window.location.pathname;
       if (path.includes('/edit')) {
-        // If we're editing, set the href to go back to the event view
-        const eventUrl = path.replace('/edit', '');
+        // If we're editing, set the href to go back to the event view;
+        // keep query (canEdit) and fragment (the whole event, for private links)
+        const eventUrl =
+          path.replace('/edit', '') + window.location.search + (window.location.hash || '');
         cancelButton.setAttribute('href', eventUrl);
       }
+    }
+
+    const cancelEventButton = this.$('#cancel-event-button');
+    if (cancelEventButton) {
+      this.listen(cancelEventButton, 'click', () => {
+        if (window.confirm('Cancel this event for everyone who has the link?')) {
+          this.dispatchEvent(new CustomEvent('cancel-event', { bubbles: true, composed: true }));
+        }
+      });
+    }
+
+    // A private + updatable event still publishes its details to public
+    // relays — surface that combination explicitly, since it cuts against
+    // the private-link promise.
+    const privateCheckbox = this.$('#private');
+    const updatableCheckbox = this.$('#updatable');
+    if (privateCheckbox && updatableCheckbox) {
+      const syncCombinedWarning = () => this.#updateCombinedWarning();
+      this.listen(privateCheckbox, 'change', syncCombinedWarning);
+      this.listen(updatableCheckbox, 'change', syncCombinedWarning);
     }
 
     this.listen(form, 'submit', e => {
@@ -158,10 +197,11 @@ export class EventForm extends BaseComponent {
     if (titleInput) titleInput.value = data.title || '';
 
     // Handle date formatting for datetime-local input
+    const startValue = data.start || data.datetime;
     if (datetimeInput) {
-      if (data.datetime) {
-        // Direct assignment if datetime is already in correct format
-        datetimeInput.value = data.datetime;
+      if (startValue && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(startValue)) {
+        // datetime-local inputs accept minute precision only
+        datetimeInput.value = startValue.slice(0, 16);
       } else if (data.date && data.time) {
         // Reconstruct datetime from separate date and time
         try {
@@ -178,6 +218,12 @@ export class EventForm extends BaseComponent {
 
     if (locationInput) locationInput.value = data.location || '';
     if (descriptionInput) descriptionInput.value = data.description || '';
+
+    const privateCheckbox = this.$('#private');
+    if (privateCheckbox) privateCheckbox.checked = this.#privateLink;
+
+    const updatableCheckbox = this.$('#updatable');
+    if (updatableCheckbox) updatableCheckbox.checked = this.#updatableLink;
   }
 
   clearValidation() {
@@ -202,6 +248,41 @@ export class EventForm extends BaseComponent {
     if (this.shadowRoot.innerHTML) {
       this.updateFormMode();
     }
+  }
+
+  setPrivateLink(value) {
+    this.#privateLink = Boolean(value);
+    if (this.shadowRoot.innerHTML) {
+      const privateCheckbox = this.$('#private');
+      if (privateCheckbox) privateCheckbox.checked = this.#privateLink;
+    }
+  }
+
+  setUpdatableLink(value) {
+    this.#updatableLink = Boolean(value);
+    if (this.shadowRoot.innerHTML) {
+      const updatableCheckbox = this.$('#updatable');
+      if (updatableCheckbox) updatableCheckbox.checked = this.#updatableLink;
+    }
+  }
+
+  setCanCancel(value) {
+    this.#canCancel = Boolean(value);
+    if (this.shadowRoot.innerHTML) {
+      this.updateFormMode();
+    }
+  }
+
+  setCancelledNotice(value) {
+    const notice = this.$('#cancelled-notice');
+    if (notice) notice.classList.toggle('hidden', !value);
+  }
+
+  #updateCombinedWarning() {
+    const warning = this.$('#combined-warning');
+    const privateChecked = this.$('#private')?.checked;
+    const updatableChecked = this.$('#updatable')?.checked;
+    if (warning) warning.classList.toggle('hidden', !(privateChecked && updatableChecked));
   }
 
   setEventData(data) {

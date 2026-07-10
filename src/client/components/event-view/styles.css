@@ -8,6 +8,40 @@ h2 {
   margin-bottom: 1.5rem;
 }
 
+.update-banner {
+  background-color: rgba(0, 123, 255, 0.1);
+  color: #004085;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.update-banner.cancelled {
+  background-color: rgba(220, 53, 69, 0.1);
+  color: #dc3545;
+  font-weight: bold;
+}
+
+#event-title.cancelled {
+  text-decoration: line-through;
+}
+
+.publish-warning {
+  background-color: rgba(255, 193, 7, 0.15);
+  color: #856404;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .event-details {
   background-color: #f8f9fa;
   padding: 1.5rem;
@@ -81,6 +115,54 @@ h2 {
 
 .share-button i {
   margin-right: 5px;
+}
+
+.calendar-button,
+.gcal-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.2s;
+}
+
+.calendar-button {
+  background-color: #28a745;
+}
+
+.calendar-button:hover,
+.calendar-button:focus {
+  background-color: #218838;
+  color: white;
+  outline: none;
+}
+
+.calendar-button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.5);
+  outline: none;
+}
+
+.gcal-button {
+  background-color: #6c757d;
+}
+
+.gcal-button:hover,
+.gcal-button:focus {
+  background-color: #5a6268;
+  color: white;
+  outline: none;
+}
+
+.gcal-button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(108, 117, 125, 0.5);
+  outline: none;
 }
 
 .form-group {

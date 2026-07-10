@@ -1,4 +1,5 @@
 import { ErrorTypes } from './errorHandler.js';
+import { isValidEncodedParam, MAX_ENCODED_LENGTH } from '../../../src/shared/eventFormat.js';
 
 /**
  * Validates event parameters
@@ -12,12 +13,13 @@ export const validateEventParam = param => {
     throw ErrorTypes.VALIDATION_ERROR('Event parameter must be a string');
   }
 
-  if (param.length > 1000) {
-    throw ErrorTypes.VALIDATION_ERROR('Event parameter is too long (max 1000 characters)');
+  if (param.length > MAX_ENCODED_LENGTH) {
+    throw ErrorTypes.VALIDATION_ERROR(
+      `Event parameter is too long (max ${MAX_ENCODED_LENGTH} characters)`
+    );
   }
 
-  // Add more validation rules as needed
-  if (!/^[a-zA-Z0-9-_]+$/.test(param)) {
+  if (!isValidEncodedParam(param)) {
     throw ErrorTypes.VALIDATION_ERROR('Event parameter contains invalid characters');
   }
 

@@ -420,6 +420,64 @@ describe('EventView Component', () => {
     expect(newActiveElement).toBe(copyButton);
   });
 
+  it('should keep the fragment in copy and edit URLs for private events', async () => {
+    setupLocationMock({
+      pathname: '/event',
+      href: 'http://localhost:3000/event?canEdit#privatePayload',
+      origin: 'http://localhost:3000',
+      search: '?canEdit',
+      hash: '#privatePayload'
+    });
+    const clipboardMock = setupClipboardMock(true);
+
+    document.body.removeChild(eventView);
+    eventView = new EventView();
+    document.body.appendChild(eventView);
+    await eventView.connectedCallback();
+
+    const editButton = eventView.$('#edit-button');
+    expect(editButton.getAttribute('href')).toBe('/event/edit#privatePayload');
+
+    const copyButton = eventView.$('#copy-button');
+    await user.click(copyButton);
+    expect(clipboardMock.writeText).toHaveBeenCalledWith(
+      'http://localhost:3000/event#privatePayload'
+    );
+  });
+
+  it('should show the Google Calendar link when event data has a start', async () => {
+    eventView.setEventData({
+      title: 'Calendar Event',
+      start: '2026-08-01T19:00',
+      tz: 'Europe/Rome',
+      date: '08/01/2026',
+      time: '7:00 PM',
+      location: 'Test Location'
+    });
+
+    const gcalButton = eventView.$('#gcal-button');
+    expect(gcalButton.classList.contains('hidden')).toBe(false);
+    expect(gcalButton.getAttribute('href')).toContain('calendar.google.com');
+
+    // jsdom has no URL.createObjectURL: path-carried events fall back to
+    // the stateless /ics/ server projection instead of a blob URL
+    const calendarButton = eventView.$('#calendar-button');
+    expect(calendarButton.classList.contains('hidden')).toBe(false);
+    expect(calendarButton.getAttribute('href')).toBe('/ics/testEvent');
+  });
+
+  it('should keep calendar links hidden when event data has no start', async () => {
+    eventView.setEventData({
+      title: 'No Start',
+      date: '04/15/2024',
+      time: '14:00',
+      location: 'Test Location'
+    });
+
+    expect(eventView.$('#calendar-button').classList.contains('hidden')).toBe(true);
+    expect(eventView.$('#gcal-button').classList.contains('hidden')).toBe(true);
+  });
+
   it('should navigate to edit URL when edit button is clicked', async () => {
     const editButton = eventView.$('#edit-button');
 
@@ -437,5 +495,159 @@ describe('EventView Component', () => {
 
     // Verify the href is correct
     expect(editButton.getAttribute('href')).toBe('/event/testEvent/edit');
+  });
+
+  it('should show the update banner and re-render data when applyUpdate is called', async () => {
+    eventView.setEventData({
+      title: 'Original Event',
+      date: '04/15/2024',
+      time: '14:00',
+      location: 'Old Location'
+    });
+
+    const banner = eventView.$('#update-banner');
+    expect(banner.classList.contains('hidden')).toBe(true);
+
+    eventView.applyUpdate({
+      title: 'Original Event',
+      date: '04/16/2024',
+      time: '18:30',
+      location: 'New Location',
+      status: 'confirmed'
+    });
+
+    expect(banner.classList.contains('hidden')).toBe(false);
+    expect(banner.classList.contains('cancelled')).toBe(false);
+    expect(eventView.$('#update-banner-text').textContent).toBe(
+      'This event was updated by the organizer — showing the latest version.'
+    );
+    expect(eventView.$('#event-date').textContent).toBe('04/16/2024');
+    expect(eventView.$('#event-time').textContent).toBe('18:30');
+    expect(eventView.$('#event-location').textContent).toBe('New Location');
+    expect(eventView.$('#event-title').classList.contains('cancelled')).toBe(false);
+  });
+
+  it('should rebuild calendar links from the updated data when applyUpdate is called', async () => {
+    eventView.setEventData({
+      title: 'Calendar Event',
+      start: '2026-08-01T19:00',
+      tz: 'Europe/Rome',
+      date: '08/01/2026',
+      time: '7:00 PM',
+      location: 'Test Location'
+    });
+
+    const gcalButton = eventView.$('#gcal-button');
+    const originalHref = gcalButton.getAttribute('href');
+
+    eventView.applyUpdate({
+      title: 'Calendar Event',
+      start: '2026-08-02T20:00',
+      tz: 'Europe/Rome',
+      date: '08/02/2026',
+      time: '8:00 PM',
+      location: 'Test Location',
+      status: 'confirmed'
+    });
+
+    expect(gcalButton.classList.contains('hidden')).toBe(false);
+    expect(gcalButton.getAttribute('href')).toContain('calendar.google.com');
+    expect(gcalButton.getAttribute('href')).not.toBe(originalHref);
+  });
+
+  it('should show the cancelled banner variant and strike the title for cancelled updates', async () => {
+    eventView.setEventData({
+      title: 'Doomed Event',
+      date: '04/15/2024',
+      time: '14:00',
+      location: 'Test Location'
+    });
+
+    eventView.applyUpdate({
+      title: 'Doomed Event',
+      date: '04/15/2024',
+      time: '14:00',
+      location: 'Test Location',
+      status: 'cancelled'
+    });
+
+    const banner = eventView.$('#update-banner');
+    expect(banner.classList.contains('hidden')).toBe(false);
+    expect(banner.classList.contains('cancelled')).toBe(true);
+    expect(eventView.$('#update-banner-text').textContent).toBe(
+      'This event was cancelled by the organizer.'
+    );
+    expect(eventView.$('#event-title').classList.contains('cancelled')).toBe(true);
+  });
+
+  it('keeps a shown update banner through an ordinary currentView re-render', async () => {
+    eventView.applyUpdate({
+      title: 'Sticky Banner Event',
+      date: '04/16/2024',
+      time: '18:30',
+      location: 'Test Location',
+      status: 'confirmed'
+    });
+
+    const banner = eventView.$('#update-banner');
+    expect(banner.classList.contains('hidden')).toBe(false);
+
+    // The currentView subscription re-renders via #updateDom, which must not
+    // own the banner — so a plain re-render leaves it in place.
+    const currentViewHandler = appState.subscribe.mock.calls.find(
+      call => call[0] === 'currentView'
+    )[1];
+    currentViewHandler('view');
+
+    expect(banner.classList.contains('hidden')).toBe(false);
+    expect(eventView.$('#update-banner-text').textContent).toBe(
+      'This event was updated by the organizer — showing the latest version.'
+    );
+  });
+
+  it('resets the banner when a different event is shown via setEventData', async () => {
+    eventView.applyUpdate({
+      title: 'Cancelled A',
+      date: '04/16/2024',
+      time: '18:30',
+      location: 'Loc',
+      status: 'cancelled'
+    });
+    const banner = eventView.$('#update-banner');
+    expect(banner.classList.contains('hidden')).toBe(false);
+    expect(banner.classList.contains('cancelled')).toBe(true);
+
+    // Navigating to a fresh, non-cancelled event must clear the previous
+    // event's banner and strikethrough (no bleed across events).
+    eventView.setEventData({
+      title: 'Fresh B',
+      date: '04/17/2024',
+      time: '19:00',
+      location: 'Loc'
+    });
+
+    expect(banner.classList.contains('hidden')).toBe(true);
+    expect(banner.classList.contains('cancelled')).toBe(false);
+    expect(eventView.$('#event-title').classList.contains('cancelled')).toBe(false);
+  });
+
+  it('surfaces a cancellation carried in the payload itself via setEventData', async () => {
+    eventView.setEventData({
+      title: 'Cancelled Payload',
+      date: '04/18/2024',
+      time: '20:00',
+      location: 'Loc',
+      status: 'cancelled'
+    });
+
+    const banner = eventView.$('#update-banner');
+    expect(banner.classList.contains('hidden')).toBe(false);
+    expect(banner.classList.contains('cancelled')).toBe(true);
+    expect(eventView.$('#update-banner-text').textContent).toBe(
+      'This event was cancelled by the organizer.'
+    );
+    // A cancelled event offers no calendar buttons
+    expect(eventView.$('#calendar-button').classList.contains('hidden')).toBe(true);
+    expect(eventView.$('#gcal-button').classList.contains('hidden')).toBe(true);
   });
 });

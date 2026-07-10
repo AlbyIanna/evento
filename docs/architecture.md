@@ -35,7 +35,7 @@ src/client/
 │   ├── event-form/      # Event creation/editing form
 │   └── event-view/      # Event display component
 ├── services/            # Service layer
-│   ├── event/          # Event-related services
+│   ├── date/           # Date helpers for the form
 │   ├── template/       # Template management
 │   ├── validation/     # Form validation
 │   └── ui/             # UI utilities
@@ -58,6 +58,20 @@ src/
 └── test/              # Server-side tests
     ├── setup.js       # Test environment setup
     └── shadow-dom-utils.js # Shadow DOM testing utilities
+```
+
+### Shared Format & Serverless Projections
+
+```
+src/shared/             # Wire-format modules shared by client and functions
+├── eventFormat.js      # Encode/decode/validate (spec: docs/event-format.md)
+├── ics.js              # RFC 5545 export + Google Calendar links
+├── preview.js          # Open Graph preview card (envelope only)
+└── denylist.js         # Deployable abuse denylist
+
+netlify/
+├── functions/          # ics.js (GET /ics/<payload> → text/calendar), health.js
+└── edge-functions/     # preview.js (OG cards served to link-preview bots)
 ```
 
 ## Key Components
@@ -137,9 +151,18 @@ src/
    ```
 
 3. **Event Editing**
+
    ```
    URL Parameters → Permission Check → Data Loading → Form Population → Update
    ```
+
+4. **Stateless Projections** (path-carried events only)
+   ```
+   /event/<payload> + bot user-agent → Edge Function → Open Graph card
+   /ics/<payload> → Netlify Function → text/calendar (RFC 5545)
+   ```
+   Private events carry the payload in the URL fragment (`/event#<payload>`),
+   which never reaches any server: no logs, no card, no projections.
 
 ## Security Features
 
@@ -242,7 +265,11 @@ src/
    - Error handling
 
 3. **Feature Expansion**
+
    - Additional event types
    - User authentication
    - Event persistence
    - Real-time updates
+
+4. **Decentralized Sharing & Federation**
+   - Reference architecture in [architecture-decentralized.md](architecture-decentralized.md) (research background in [fediverse-research.md](fediverse-research.md))

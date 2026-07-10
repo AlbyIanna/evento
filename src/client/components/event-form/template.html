@@ -7,6 +7,9 @@
   href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
 />
 <form id="event-form" novalidate>
+  <div id="cancelled-notice" class="field-warning hidden" role="alert">
+    This event is cancelled. Saving will keep it cancelled for everyone who has the link.
+  </div>
   <div class="form-group">
     <label for="title">Event Title*</label>
     <input
@@ -48,6 +51,31 @@
     <label for="description">Description</label>
     <textarea id="description" name="description" rows="4"></textarea>
   </div>
+  <div class="form-group">
+    <label class="checkbox-label"
+      ><input type="checkbox" id="private" name="private" aria-describedby="private-hint" /> Private
+      link (no preview card)</label
+    >
+    <div id="private-hint" class="field-hint">
+      The event lives only in the link itself — it never reaches our server, so chats will not show
+      a preview card. Opening it in an external calendar shares it with that provider.
+    </div>
+  </div>
+  <div class="form-group">
+    <label class="checkbox-label"
+      ><input type="checkbox" id="updatable" name="updatable" aria-describedby="updatable-hint" />
+      Updatable link</label
+    >
+    <div id="updatable-hint" class="field-hint">
+      Your browser keeps a signing key so you can push time changes or a cancellation to everyone
+      who already has the link. Updates travel through public Nostr relays, where the event data is
+      publicly readable.
+    </div>
+    <div id="combined-warning" class="field-warning hidden" role="alert">
+      Even with a private link, updates put the event details on public Nostr relays where anyone
+      can read them.
+    </div>
+  </div>
   <div class="button-container">
     <!-- Create mode button -->
     <button type="submit" id="create-button">Create Event Link</button>
@@ -55,6 +83,9 @@
     <!-- Edit mode buttons -->
     <button type="submit" id="update-button" class="hidden">
       <i class="fas fa-link" aria-hidden="true"></i> Generate New Link
+    </button>
+    <button type="button" id="cancel-event-button" class="danger-button hidden">
+      Cancel this event
     </button>
     <a id="cancel-button" class="cancel-button hidden" href=""
       ><i class="fas fa-times" aria-hidden="true"></i> Cancel</a
