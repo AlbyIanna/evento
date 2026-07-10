@@ -246,3 +246,6 @@ src/
    - User authentication
    - Event persistence
    - Real-time updates
+
+4. **Decentralized Sharing & Federation**
+   - Reference architecture in [architecture-decentralized.md](architecture-decentralized.md) (research background in [fediverse-research.md](fediverse-research.md))
