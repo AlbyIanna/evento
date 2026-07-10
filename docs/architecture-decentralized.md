@@ -1,130 +1,132 @@
-# Evento decentralizzato — architettura di riferimento
+# Evento — visione e architettura di riferimento (v2)
 
-**Stato:** proposta approvata, in attesa di implementazione per fasi
-**Basata su:** [fediverse-research.md](fediverse-research.md) (ricerca multi-agente con fact-checking, luglio 2026)
-**Complementare a:** [architecture.md](architecture.md) (architettura applicativa attuale)
+**Stato:** approvata dopo brainstorming e review critica; sostituisce integralmente la v1 (federazione Fediverso read-only), superata a seguito della review avversariale — la v1 resta nella cronologia git.
+**Basi:** [fediverse-research.md](fediverse-research.md) (ricerca fact-checked, luglio 2026) e review critica della v1 (contraddizione minting/portabilità, beneficio quasi nullo della presenza ActivityPub, assenza di anteprime e di una storia per modifiche/annullamenti, shortener non persistente, fuso orario mancante).
 
-## I principi, in ordine di priorità
+## Il problema che risolviamo — e per chi
 
-1. **No Data** — nessun dato *degli utenti* viene salvato da Evento. È ammesso stato di *configurazione dell'operatore* (chiavi in variabili d'ambiente, denylist nel deploy): segreti e policy, mai contenuti.
-2. **No Login** — nessun account, mai, in nessuna funzionalità inclusa la federazione.
-3. **Decentralizzato** — nessun punto centrale la cui scomparsa distrugge gli eventi; interoperabilità tramite standard aperti, non tramite piattaforme.
-4. **Open source** — solo dipendenze con licenza approvata OSI.
-5. **Facile per chiunque** — ogni capacità avanzata è opzionale e non complica il percorso base "compila → condividi il link".
+**L'organizzatore informale**: cena di venerdì, calcetto, compleanno. Il suo pubblico esiste già — è il gruppo WhatsApp/Telegram/Signal. Oggi risolve con un messaggio di testo, e i suoi problemi reali sono: il messaggio si perde nella chat, il link condiviso è illeggibile, la gente non mette l'evento in calendario e si dimentica, e quando l'orario cambia il passaparola fa danni.
 
-## Principio architetturale: l'URL è il documento
+> **Problem statement.** Aiutare qualcuno a organizzare un evento dentro una conversazione che esiste già, senza far pagare a nessuno il prezzo di una piattaforma (account, dati, lock-in), ma con l'affidabilità minima che un evento richiede: si capisce al volo, finisce in calendario, e i cambiamenti raggiungono chi ha il link.
 
-L'evento resta ciò che è oggi: un payload autocontenuto codificato nell'URL. **Ogni nuova capacità è una proiezione pura, deterministica e stateless di quel payload in uno standard aperto.** Niente viene mai scritto: la stessa richiesta produce sempre la stessa risposta, calcolata al volo.
+**Non-goal fondante: non siamo un motore di scoperta eventi.** L'organizzatore di comunità che vuole raggiungere sconosciuti e costruirsi un pubblico è servito bene da [Gancio](https://gancio.org/) e [Mobilizon](https://mobilizon.org/) — glieli indichiamo con affetto. Questa rinuncia è deliberata (decisione D1): la ricerca ha dimostrato che la scoperta federata per un publisher anonimo vale quasi zero, e il nostro utente non ne ha bisogno — la rete di distribuzione decentralizzata di Evento esiste già: sono le chat dei suoi utenti.
 
-Da questo principio la decentralizzazione emerge per tre vie complementari, nessuna delle quali richiede un database:
+## I vincoli (in ordine di priorità)
 
-| Via | Meccanismo | Che cosa decentralizza |
-|---|---|---|
-| **Replicabilità radicale** | Il formato dell'evento è una spec pubblica e versionata; chiunque può self-hostare un'istanza (deploy statico) e ogni istanza legge gli URL di ogni altra | L'infrastruttura: nessuna istanza è speciale, i link sopravvivono al dominio originale per semplice ri-hosting del path |
-| **Standard aperti stateless** | ICS (RFC 5545), microformati h-event + JSON-LD schema.org, ActivityStreams 2.0 read-only | La *lettura*: calendari, motori di ricerca e piattaforme del Fediverso consumano l'evento senza chiedere niente a Evento |
-| **Pubblicazione opt-in a stato zero** | Nostr NIP-52, firmato e spedito dal browser dell'utente ai relay | La *scrittura*: l'unico protocollo di federazione push in cui il publisher non deve mantenere alcuno stato |
+1. **Il pubblico esiste già.** Nessuna feature che presuppone sconosciuti da raggiungere.
+2. **Zero dati utente a riposo sui nostri server** — inclusi log e shortener. Stato presso terzi ammesso solo se: opt-in esplicito, infrastruttura-bene-comune (mai un vendor), e degradabile.
+3. **Degradazione elegante come legge.** Se tutto sparisce tranne il link, l'evento resta leggibile. Ogni strato sopra il payload è un'aggiunta, mai una dipendenza.
+4. **Sessanta secondi da telefono.** Creare e condividere senza leggere niente; le capacità avanzate non compaiono nel percorso base.
+5. **Niente account, mai.** Al massimo chiavi generate silenziosamente dal browser e custodite dal client (URL di modifica, localStorage).
+6. **Open source OSI-only; self-hosting a un click** — e l'istanza self-hostata replica tutto, non una versione menomata.
 
-La ricerca ha stabilito perché ci fermiamo qui: la federazione ActivityPub piena richiede follower persistenti, code di consegna e una inbox sempre attiva (un database sotto altro nome), e per un publisher senza follower avrebbe comunque reach quasi nulla — il Fediverso è push-to-inbox, e la scoperta passa da relazioni di follow che il modello anonimo di Evento non può coltivare. La superficie di scoperta realistica degli eventi di Evento è la ricerca web, che è esattamente ciò che alimentano h-event e JSON-LD.
-
-## Vista d'insieme
+## Architettura: tre piani
 
 ```mermaid
 flowchart TB
-    subgraph browser["Browser dell'utente (zero server)"]
-        form["Form evento"] --> enc["Modulo condiviso encode/decode<br/>(formato versionato)"]
-        enc --> url["URL /event/#lt;payload#gt;"]
-        url --> view["Rendering client<br/>(percorso base, invariato)"]
-        url --> ics1["Export .ics<br/>(lib 'ics', ISC)"]
-        url --> nostr["Pubblica su Nostr (opt-in)<br/>(nostr-tools, kind 31923)"]
+    subgraph creazione["Creazione (browser, zero server)"]
+        form["Form evento"] --> choice{"Con anteprima<br/>o riservato?"}
+        choice -->|"con anteprima"| path["Payload nel path<br/>(visibile al server)"]
+        choice -->|"riservato"| frag["Payload nel fragment #35;<br/>(mai inviato al server)"]
+        form -. "opzionale" .-> key["Chiavi evento<br/>(canale aggiornamenti)"]
     end
-
-    subgraph functions["Proiezioni stateless (Netlify Functions / Edge)"]
-        url -. "Accept: application/activity+json" .-> as2["Oggetto AS2 Event<br/>(profilo FEP-8a8e)"]
-        url -. "GET /ics/#lt;payload#gt;" .-> cal["text/calendar<br/>(webcal://)"]
-        url -. "crawler / bot" .-> hevent["HTML pre-renderizzato<br/>h-event + JSON-LD"]
-        wf[".well-known/webfinger"] --> actor["Attore statico 'Application'<br/>chiave RSA in secret"]
-        actor -. attribuzione .-> as2
-        guard{{"Verifica token HMAC<br/>+ denylist"}} --- as2
-        guard --- cal
-        guard --- hevent
+    subgraph fruizione["Fruizione (browser)"]
+        path --> render["Rendering client"]
+        frag --> render
+        render --> ics["Export .ics<br/>(lib 'ics', ISC)"]
+        render -. "se l'URL ha un riferimento" .-> relays[("Relay Nostr<br/>indipendenti")]
+        relays -. "ultima versione firmata<br/>(update / annullamento)" .-> render
     end
-
-    nostr --> relay[("Relay Nostr<br/>di terzi")]
-    as2 --> fedi["Mastodon / Mobilizon / Gancio"]
-    cal --> calapps["App calendario"]
-    hevent --> search["Motori di ricerca"]
+    subgraph server["Proiezioni stateless (solo eventi con anteprima)"]
+        path -. "bot dei messenger" .-> og["Card Open Graph<br/>(solo busta: titolo, data, luogo)"]
+        path -. "GET /ics/..." .-> calsrv["text/calendar"]
+    end
+    key -. "pubblica versioni firmate" .-> relays
 ```
 
-Le frecce tratteggiate sono proiezioni calcolate per-request: nessuna di esse scrive alcunché.
+### Piano 1 — Il documento (l'unica cosa indispensabile)
 
-## Strato 0 — Il formato evento come protocollo aperto
+L'evento resta un payload autocontenuto nell'URL, ma il formato diventa una **spec pubblica versionata** (`docs/event-format.md`, da scrivere in fase 0):
 
-Il fondamento di tutto: il payload smette di essere un dettaglio implementativo e diventa **il protocollo del sistema**.
+```
+{ v: 2, title, start, end?, tz, location, description?, status, updates? }
+```
 
-- **Formato versionato**: `{ v: 1, title, datetime, endDatetime?, location, description? }` — JSON serializzato e codificato base64url. Il campo `v` garantisce evoluzione senza rompere i link esistenti (regola: i decoder accettano sempre le versioni precedenti).
-- **`endDatetime` opzionale**: necessario per mappare senza perdite su tutti i target — FEP-8a8e rende `endTime` obbligatorio (con marcatore per eventi a durata aperta), ICS ha `DTEND`, NIP-52 ha `end`, i lexicon AT hanno `endsAt`. In sua assenza le proiezioni usano il marcatore open-ended o una durata di default dichiarata.
-- **Spec pubblica** (`docs/event-format.md`, da scrivere in fase 0): schema, encoding, regole di validazione e di compatibilità. È ciò che rende gli URL portabili tra istanze self-hostate — la forma di decentralizzazione più coerente con "No Data": non federare i dati, ma rendere banale replicare l'infrastruttura.
-- **Un solo modulo encode/decode/validate**, condiviso tra client e functions. Oggi la logica è triplicata (`src/client/utils/eventUtils.js`, `src/client/services/event/eventService.js`, `netlify/functions/utils/validation.js`): il consolidamento è prerequisito di ogni strato successivo, perché le proiezioni server devono decodificare *esattamente* come il client.
+- **`tz` (fuso orario, IANA) è obbligatorio**: era il difetto latente del modello attuale — senza fuso, il primo export ICS tra fusi diversi produce orari sbagliati.
+- **`status`** (`confirmed` | `cancelled`): l'annullamento è un'informazione di prima classe, non un caso speciale.
+- **`updates?`**: riferimento facoltativo al canale di aggiornamento (chiave pubblica Nostr + identificatore `d`). La sua assenza è legittima: un evento senza canale è semplicemente immutabile.
+- **Regole di compatibilità nella spec**: i decoder accettano tutte le versioni precedenti (i payload attuali senza `v` sono la v1 implicita); i campi sconosciuti si ignorano; la versione sale solo per cambi incompatibili.
+- **Consolidamento del codice**: encode/decode/validate oggi triplicati (`src/client/utils/eventUtils.js`, `src/client/services/event/eventService.js`, `netlify/functions/utils/validation.js`) diventano un unico modulo condiviso client/functions — prerequisito di tutto il resto.
 
-## Strato 1 — Interop client-side (zero server, zero rischio)
+La spec pubblica è anche la nostra prima forma di decentralizzazione: **replicabilità radicale**. Chiunque self-hosta un'istanza, e ogni istanza legge gli URL di ogni altra; i link sopravvivono al dominio che li ha generati.
 
-Il massimo valore per riga di codice dell'intera ricerca, senza alcun costo architetturale:
+### Piano 2 — La presentazione (proiezioni stateless minime)
 
-- **Export ICS nel browser**: la libreria `ics` (licenza ISC, attivamente mantenuta) genera un `VEVENT` dal payload già presente nell'URL, offerto come download Blob. Compatibile con ogni app calendario, inclusi gli import di Mobilizon/Friendica/Hubzilla.
-- **Link "aggiungi a Google/Outlook Calendar"** costruiti client-side (pura composizione di stringhe): comodi ma non garantiti dai vendor, quindi sempre affiancati — mai sostituiti — dall'ICS aperto. Al click i dati dell'evento raggiungono quel vendor: va detto nell'interfaccia.
-- **Esclusione motivata**: il web component `add-to-calendar-button` è Elastic License 2.0, non approvata OSI — in conflitto con il principio 4.
+Due sole proiezioni, scelte perché servono job reali dell'utente:
 
-## Strato 2 — Proiezioni server stateless
+- **Card Open Graph per i messenger.** Il payload nel path viene decodificato al volo da una function che serve i meta tag ai bot di anteprima di WhatsApp/Telegram/Slack/Mastodon. È la proiezione a più alto valore dell'intero sistema: rende il link leggibile nel posto esatto dove viene condiviso — e, coprendo l'URL con una card, **elimina il bisogno dello shortener**, che viene rimosso (era stato non persistente: i link corti morivano a ogni redeploy).
+- **`/ics/<payload>` → `text/calendar`** per i link `webcal://` e il fetch da macchine, oltre all'export ICS client-side del percorso base.
 
-Estende la raggiungibilità dell'evento a consumatori che non eseguono JavaScript, mantenendo il determinismo: ogni risposta è funzione pura dell'URL.
+**Privacy per scelta esplicita, non per effetto collaterale** (decisione D3): alla creazione l'utente sceglie
+- **"con anteprima"** — payload nel path: il server (e i bot di anteprima) lo vedono, la card funziona;
+- **"riservato"** — payload nel fragment `#`, che il browser non invia mai al server: nessuna traccia nei log, nessuna anteprima, contenuto visibile solo a chi apre il link.
 
-- **Content negotiation su `/event/<payload>`**: alla richiesta `Accept: application/activity+json`, una function restituisce l'oggetto ActivityStreams 2.0 `Event` secondo il profilo FEP-8a8e, con il vocabolario location in stile Mobilizon (schema.org `Place`/`PostalAddress`) — il formato de facto degli eventi federati. Effetto: incollare un link Evento nella ricerca di Mastodon/Mobilizon/Gancio produce un oggetto risolvibile, e le piattaforme event-native lo mostrano come vero evento.
-- **`/ics/<payload>` → `text/calendar`**: abilita i link `webcal://` e il fetch da parte di macchine (lo stesso modulo di generazione ICS dello strato 1, eseguito nella function).
-- **Pre-rendering h-event + JSON-LD per i crawler**: i parser di microformati e i motori di ricerca leggono l'HTML grezzo senza eseguire JavaScript, quindi il DOM costruito lato client è invisibile proprio ai consumatori a cui h-event è destinato. Una edge function serve ai crawler l'HTML con markup `h-event` (CC0) e JSON-LD `schema.org/Event`. È l'investimento di scoperta più importante: la ricerca web è dove gli eventi di Evento possono davvero essere trovati.
-- **Attore statico + WebFinger**: un documento attore di tipo `Application` (`events@<dominio>`, pattern a singolo attore d'istanza alla Gancio) con chiave RSA in un secret Netlify, e la risposta `/.well-known/webfinger` corrispondente. Serve solo a rendere gli oggetti AS2 attribuibili e fetchabili anche da istanze in authorized-fetch. **Publish-only: nessuna inbox.** Un endpoint inbox aperto costerebbe verifica firme per ogni consegna su fatturazione per-invocazione senza cap, esposto alle tempeste di `Delete` documentate del Fediverso — e non avremmo comunque stato su cui applicare ciò che riceve.
+**Postura anti-abuso, ridimensionata alla superficie reale**: la card renderizza *solo la busta* (titolo, data, luogo — testo breve, sempre escaped, mai HTML dell'utente, mai la descrizione), con etichetta "contenuto fornito dall'utente" e denylist di hash deployabile per i takedown. Il grosso della difesa resta strutturale: il rendering completo è client-side, come oggi.
 
-### Postura anti-abuso (vincolante per tutto lo strato 2)
+### Piano 3 — La vita dell'evento (opt-in, degradabile)
 
-Qualunque endpoint che renderizza lato server contenuto fornito nell'URL trasforma Evento in un host di contenuti first-party, anonimo e gratuito: il pattern di abuso degli URL shortener, con rischio concreto di flag Safe Browsing sull'intero dominio e di defederazione permanente via blocklist condivise. Perciò:
+Il difetto funzionale più grave del modello "l'URL è il documento" è che gli eventi *cambiano*: orario spostato, luogo diverso, annullamento — e chi ha il vecchio link ha dati sbagliati per sempre. Serve un puntatore mutabile; il vincolo 2 impone che non sia nostro. **I replaceable events di Nostr sono esattamente questo: un puntatore mutabile, decentralizzato e gratuito, custodito da relay indipendenti** (protocollo aperto, libreria `nostr-tools`, Unlicense).
 
-1. **Token di minting HMAC**: alla creazione, l'app appone all'URL un token `HMAC(chiave_server, payload)`. Le proiezioni server verificano il token prima di rispondere; senza token valido rispondono 404 e il contenuto esiste solo nel rendering client (che resta libero, come oggi — è la difesa accidentale ma reale dell'architettura attuale). Il token prova che l'URL è stato coniato tramite Evento, abilitando rate-limiting alla creazione. Trade-off accettato: ruotare la chiave (kill-switch di massa) invalida le *proiezioni server* dei vecchi URL, non i link stessi.
-2. **Denylist deployabile**: hash dei payload segnalati, in configurazione; un redeploy è il meccanismo di takedown. Stato di configurazione, non dato utente.
-3. **Etichettatura**: le proiezioni HTML dichiarano visibilmente "contenuto fornito dall'utente".
-4. **Niente firma di contenuti arbitrari**: l'attore non firma mai in uscita payload non mintati.
+Flusso:
+1. Alla creazione (opt-in "voglio poter aggiornare l'evento"), il browser genera una coppia di chiavi — silenziosamente, nessun concetto nuovo per l'utente. La chiave privata vive nel capability URL di modifica dell'organizzatore (e nel suo localStorage).
+2. L'URL condiviso contiene il payload **più** il riferimento (`updates`: pubkey + `d`).
+3. Chi apre il link vede subito i dati del payload; in background il client interroga i relay: "esiste una versione più recente firmata da quella chiave?" Se sì, mostra l'aggiornamento o l'avviso di annullamento. Se i relay non rispondono, il payload basta.
+4. L'organizzatore modifica → il client pubblica la nuova versione firmata sui relay (evento replaceable: i relay tengono solo l'ultima).
 
-## Strato 3 — Pubblicazione decentralizzata opt-in
+Proprietà: nessun dato sui nostri server; i relay vedono solo ciò che l'organizzatore sceglie di rendere aggiornabile; la perdita della chiave degrada l'evento a immutabile (mai a illeggibile); la sparizione dei relay degrada al payload (vincolo 3). Nostr qui non è una feature di pubblicazione per un pubblico che non esiste — è **il canale di aggiornamento per il pubblico che esiste già**.
 
-- **"Pubblica su Nostr"**, interamente client-side: `nostr-tools` (pubblico dominio/Unlicense, attivamente mantenuta) firma un evento kind 31923 (tag obbligatori `d`, `title`, `start`) con una chiave usa-e-getta generata nel browser — o con l'estensione NIP-07 dell'utente, se presente — e lo spedisce via WebSocket a una rosa di relay pubblici. Evento non tocca nulla: è l'unica federazione push a stato zero per il publisher, e il modello di scoperta di Nostr (relay interrogabili per filtro, senza follow) è strutturalmente compatibile con un publisher anonimo.
-- **Disclosure obbligatoria nell'interfaccia**: l'evento persisterà su relay di terzi con cancellazione solo best-effort (NIP-09); perdere la chiave usa-e-getta rende l'evento immodificabile; il pubblico dei client calendario Nostr è oggi molto piccolo. L'opt-in esplicito trasforma la deviazione da "No Data" in un confine di consenso: è l'utente, non Evento, a scegliere dove il suo evento vive.
-- **Estensione futura (documentata, non nel target)**: delega opt-in a un'istanza Mobilizon (API GraphQL, bot OAuth2 con scope `write:event:*`) o Gancio — reach federata reale con zero codice di protocollo, al costo della persistenza presso un server terzo e della dipendenza dalle sue policy. Da riconsiderare se emergesse domanda reale di presenza in timeline federate.
+## RSVP: fuori scope, pianificato come possibilità futura
+
+Il "ci sono!" oggi si dice nella chat, dov'è sempre stato: non competiamo con la conversazione (decisione D5). Ma il disegno lascia lo spazio pronto, se la domanda emergesse:
+
+- **Meccanismo già coerente coi vincoli**: RSVP come eventi Nostr (kind 31925) firmati con chiavi usa-e-getta generate dal browser del partecipante, indirizzati al riferimento dell'evento; il client li conta interrogando i relay. Niente login, niente nostri server, nome facoltativo.
+- **Prerequisiti nel formato**: il campo `updates` (pubkey + `d`) è già l'ancora a cui gli RSVP si aggancerebbero; nessuna modifica alla spec necessaria.
+- **Criterio di attivazione**: richieste ricorrenti degli utenti — non "perché si può". A scala di gruppo-chat il valore rispetto a "rispondo in chat" è da dimostrare.
+
+## Tecnologie valutate e scartate (registro)
+
+| Tecnologia | Verdetto | Motivo |
+|---|---|---|
+| **Federazione ActivityPub piena** | Scartata | Richiede follower/inbox/code persistenti (= database, dati personali); reach da zero follower ≈ 0 (ricerca, cap. scoperta) |
+| **Presenza AP read-only (attore + WebFinger + AS2)** — il cuore della v1 | Scartata dal target | Beneficio quasi nullo per il nostro utente (Mastodon rende gli Event come "titolo+link"; nessuno cerca capability URL); il minting HMAC contraddiceva la portabilità tra istanze; la rotazione chiave rompeva la fetchability a lungo termine che il Fediverso pretende. Il formato resta proiettabile in AS2 se un giorno servisse |
+| **h-event / JSON-LD per crawler** | Scartata | I motori non indicizzano pagine senza inbound link; servire HTML diverso ai bot è cloaking. Sostituita dalle card OG, che servono il caso d'uso reale |
+| **RSS/Atom, WebSub** | Scartate | Presuppongono collezioni persistenti e topic mutabili lato server |
+| **Blockchain (ledger, smart contract)** | Scartata | Test fallito: un evento ha *un solo scrittore* (la chiave dell'organizzatore) — non serve consenso globale. E ogni costo strutturale colpisce un vincolo: permanenza immutabile vs eventi che vogliono poter cambiare e sparire (privacy); fee vs gratis-per-chiunque; wallet vs niente-account. Riaprire solo se comparisse un problema di scarsità autentica (biglietteria con posti limitati) |
+| **IPFS / storage content-addressed** | Scartata | Il payload viaggia già dentro il link: autocontenuto batte content-addressed (niente da fetchare, niente pinning, niente gateway) |
+| **AT Protocol** | Scartata | La scrittura richiede un account (viola il vincolo 5) |
+| **URL shortener** | Rimosso | Intrinsecamente stateful (quello attuale, in-memory, perde i link a ogni redeploy); il suo job estetico è assorbito dalle card OG |
+| **Nostr NIP-52 come pubblicazione verso il pubblico Nostr** (v1, strato 3) | Ridimensionata | Pubblico minuscolo, client di punta abbandonato. Nostr resta, ma con un ruolo diverso: infrastruttura di aggiornamento |
 
 ## Decisioni (registro)
 
-| # | Decisione | Motivazione | Alternativa scartata |
-|---|---|---|---|
-| D1 | L'URL resta l'unica fonte di verità; ogni feature è una proiezione pura | Preserva "No Data" per costruzione, non per disciplina | Introdurre storage "solo per la federazione" (è il bivio, non un incremento) |
-| D2 | Formato evento come spec pubblica versionata | Decentralizzazione per replicabilità; i link sopravvivono alle istanze | Formato interno non documentato |
-| D3 | `endDatetime` opzionale nel modello | Mapping senza perdite su FEP-8a8e/ICS/NIP-52/AT | Solo `datetime` (proiezioni non conformi) |
-| D4 | Federazione AP limitata a read-only, publish-only, singolo attore | Inbox/follower = database + dati personali + costi senza cap; reach da zero follower ≈ 0 | Federazione piena (Fedify + KV store + migrazione da Netlify) |
-| D5 | Anti-abuso: minting HMAC + denylist deployabile + etichettatura | Unica storia anti-abuso credibile senza dati utente; il rendering client resta libero | Nessuna mitigazione (rischio dominio) o moderazione con database |
-| D6 | Nostr NIP-52 come unico canale di federazione push, opt-in | Unico protocollo a stato zero per il publisher; scoperta pull-based | AT Protocol (richiede account: viola "No Login") |
-| D7 | Solo dipendenze OSI: `ics` (ISC), `nostr-tools` (Unlicense) | Principio 4 | `add-to-calendar-button` (Elastic-2.0) |
-| D8 | Delega a Mobilizon/Gancio rimandata a estensione futura | Reach reale ma persistenza presso terzi; attivarla solo su domanda degli utenti | Includerla subito nel target |
+| # | Decisione | Motivazione |
+|---|---|---|
+| D1 | Serviamo solo l'organizzatore informale; la scoperta è un non-goal | Il suo pubblico esiste già; per la scoperta esistono Gancio/Mobilizon |
+| D2 | L'URL resta l'unica fonte di verità; ogni capacità è proiezione o aggiunta degradabile | Preserva "No Data" per costruzione |
+| D3 | Privacy per scelta esplicita alla creazione: "con anteprima" (path) o "riservato" (fragment) | Il trade-off anteprima/privacy diventa un consenso dell'utente, non un effetto collaterale |
+| D4 | Nostr come dipendenza infrastrutturale per aggiornamenti/annullamenti | Unico puntatore mutabile decentralizzato compatibile con tutti i vincoli; degrada al payload |
+| D5 | RSVP fuori scope, con spazio pronto nel formato e meccanismo già individuato | Il "ci sono" vive in chat; attivare solo su domanda reale |
+| D6 | Formato v2 con `tz` obbligatorio e `status` | Correzione dei due difetti funzionali del modello dati (fusi orari, annullamenti) |
+| D7 | Solo dipendenze OSI: `ics` (ISC), `nostr-tools` (Unlicense) | Principio open source; escluso `add-to-calendar-button` (Elastic-2.0) |
+| D8 | Card OG limitate alla busta, escaped, con denylist deployabile | Superficie anti-abuso minima credibile senza stato utente |
 
-## Non-goals espliciti
-
-- **Inbox ActivityPub, follower, consegna push, RSVP federati** — richiedono persistenza; gli RSVP sono per definizione liste di partecipanti, cioè dati personali: incompatibili con il principio 1 finché regge.
-- **Feed RSS/Atom e WebSub** — descrivono collezioni con ID stabili e topic mutabili: Evento non ha liste di eventi da enumerare né "aggiornamenti" da spingere (modifica = nuovo URL).
-- **Account di qualunque tipo**, inclusi account "solo per federare" — principio 2.
-- **Framework AP full-stack** (Fedify e simili) — richiedono KV store e code; Netlify non è tra i loro target documentati.
-
-## Roadmap di implementazione
+## Roadmap
 
 | Fase | Contenuto | Criteri di "pronto" |
 |---|---|---|
-| **0 — Fondamenta** | Spec `docs/event-format.md`; modulo unico encode/decode/validate condiviso client+functions; campo `endDatetime` opzionale nel form e nel formato (v1) | I tre punti di duplicazione attuali importano dal modulo unico; i vecchi URL (senza `v`) continuano a decodificare; test di round-trip encode→decode |
-| **1 — Calendari** | Export ICS client-side (`ics`); link vendor Google/Outlook con avvertenza | Un evento creato si importa correttamente in almeno Google Calendar, Apple Calendar e Thunderbird |
-| **2 — Proiezioni** | Minting HMAC alla creazione + verifica nelle functions; `/ics/<payload>`; content negotiation AS2 su `/event/`; pre-render h-event+JSON-LD per crawler; attore statico + WebFinger; denylist | L'URL di un evento incollato nella ricerca di un'istanza Mobilizon/Gancio risolve in un evento; il validator di event-federation.eu accetta l'oggetto AS2; un payload non mintato riceve 404 dalle proiezioni |
-| **3 — Nostr** | Pulsante opt-in "Pubblica su Nostr" con disclosure; chiave usa-e-getta o NIP-07 | L'evento pubblicato è leggibile da un client NIP-52 interrogando i relay scelti |
+| **0 — Formato v2** | Spec `docs/event-format.md`; modulo unico encode/decode/validate; `tz` obbligatorio, `status`, `end?`, `updates?`; retro-compatibilità con gli URL attuali | Round-trip encode→decode testato; un URL v1 (attuale) decodifica ancora; i tre punti di duplicazione importano dal modulo unico |
+| **1 — Leggibilità** | Card OG (function stateless, solo busta); scelta "con anteprima / riservato" nel form; export ICS client-side + `/ics/`; **rimozione dello shortener** | Il link incollato in WhatsApp/Telegram mostra titolo e data; un evento creato a Roma si importa con l'orario giusto in un calendario a New York; un evento "riservato" non compare nei log delle functions |
+| **2 — Vita dell'evento** | Opt-in aggiornamenti: chiavi generate dal client, pubblicazione versioni firmate sui relay, verifica in background alla lettura, banner "aggiornato/annullato" | Modifica dell'orario visibile a chi riapre il vecchio link entro pochi secondi; con i relay irraggiungibili il link mostra il payload originale senza errori |
+| **(futura) 3 — RSVP** | Da attivare solo su domanda reale; meccanismo: kind 31925 con chiavi usa-e-getta | — |
 
-Le fasi sono indipendenti a valle della 0: la 1 non richiede la 2, la 3 non richiede né 1 né 2.
+Le fasi 1 e 2 sono indipendenti tra loro a valle della fase 0.
