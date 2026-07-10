@@ -108,8 +108,13 @@ function checkForUpdates(eventData, encodedEvent) {
         // We just authored this version; publish it and don't fetch (a
         // lagging relay could otherwise echo an older version back onto us).
         const published = await publishCurrentVersion(eventData, encodedEvent);
-        if (published) {
+        if (published.ok) {
           clearPendingPublish();
+          if (published.ackCount < published.relayCount) {
+            // Honest report: the change landed, but only on part of the
+            // relay set — don't claim a full publish.
+            eventView.showPublishPartial?.(published.ackCount, published.relayCount);
+          }
         } else {
           // Leave the gate armed so reopening the link retries, and tell the
           // organizer the change hasn't propagated yet.

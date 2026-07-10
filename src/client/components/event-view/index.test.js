@@ -650,4 +650,28 @@ describe('EventView Component', () => {
     expect(eventView.$('#calendar-button').classList.contains('hidden')).toBe(true);
     expect(eventView.$('#gcal-button').classList.contains('hidden')).toBe(true);
   });
+
+  it('shows the zero-coverage warning when showPublishWarning is called', async () => {
+    const warning = eventView.$('#publish-warning');
+    expect(warning.classList.contains('hidden')).toBe(true);
+
+    eventView.showPublishWarning();
+
+    expect(warning.classList.contains('hidden')).toBe(false);
+    expect(eventView.$('#publish-warning-text').textContent).toContain(
+      "your change isn't published yet"
+    );
+  });
+
+  it('reports N of M relay coverage when showPublishPartial is called', async () => {
+    const warning = eventView.$('#publish-warning');
+    expect(warning.classList.contains('hidden')).toBe(true);
+
+    eventView.showPublishPartial(1, 4);
+
+    expect(warning.classList.contains('hidden')).toBe(false);
+    expect(eventView.$('#publish-warning-text').textContent).toBe(
+      "Published to 1 of 4 relays — some relays couldn't be reached."
+    );
+  });
 });

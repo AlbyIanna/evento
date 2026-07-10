@@ -188,6 +188,16 @@ export class EventView extends BaseComponent {
     if (warning) warning.classList.remove('hidden');
   }
 
+  // Honest publish report when the change landed on only part of the relay
+  // set: it IS published, but with reduced redundancy.
+  showPublishPartial(ackCount, relayCount) {
+    const warning = this.$('#publish-warning');
+    const text = this.$('#publish-warning-text');
+    if (!warning || !text) return;
+    text.textContent = `Published to ${ackCount} of ${relayCount} relays — some relays couldn't be reached.`;
+    warning.classList.remove('hidden');
+  }
+
   #updateDom(eventData) {
     const title = this.$('#event-title');
     const date = this.$('#event-date');

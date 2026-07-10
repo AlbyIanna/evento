@@ -202,21 +202,23 @@ describe('pendingPublish handshake', () => {
 });
 
 describe('publishCurrentVersion', () => {
+  const NO_PUBLISH = { ok: false, ackCount: 0, relayCount: DEFAULT_RELAYS.length };
+
   it('is a no-op without an updates pointer', async () => {
     const channel = makeChannel();
     const event = makeEvent(channel, { updates: null });
-    await expect(publishCurrentVersion(event, 'whatever')).resolves.toBe(false);
+    await expect(publishCurrentVersion(event, 'whatever')).resolves.toEqual(NO_PUBLISH);
     expect(FakeWebSocket.instances).toHaveLength(0);
   });
 
   it('is a no-op without the channel secret in localStorage', async () => {
     const channel = makeChannel();
     const event = makeEvent(channel);
-    await expect(publishCurrentVersion(event, encodeEventData(event))).resolves.toBe(false);
+    await expect(publishCurrentVersion(event, encodeEventData(event))).resolves.toEqual(NO_PUBLISH);
     expect(FakeWebSocket.instances).toHaveLength(0);
   });
 
-  it('signs, publishes to every relay in parallel and resolves true on the first OK', async () => {
+  it('signs, publishes to every relay and reports full coverage when all ack', async () => {
     const { pk, d } = generateUpdateChannel();
     const event = makeEvent({ pk, d });
     const encoded = encodeEventData(event);
@@ -225,7 +227,7 @@ describe('publishCurrentVersion', () => {
     const sockets = FakeWebSocket.instances;
     expect(sockets.map(socket => socket.url)).toEqual(DEFAULT_RELAYS);
 
-    sockets[0].open();
+    sockets.forEach(socket => socket.open());
     const [type, signed] = sockets[0].sent[0];
     expect(type).toBe('EVENT');
     expect(signed.kind).toBe(31923);
@@ -236,8 +238,48 @@ describe('publishCurrentVersion', () => {
     expect(verifyEvent(signed)).toBe(true);
 
     sockets[0].message(['OK', signed.id, true, '']);
-    await expect(promise).resolves.toBe(true);
+    // The first OK must NOT settle the publish: the other relays still owe
+    // their verdict, so their sockets stay open.
+    expect(sockets[1].readyState).toBe(1);
+
+    sockets[1].message(['OK', signed.id, true, '']);
+    sockets[2].message(['OK', signed.id, true, '']);
+    sockets[3].message(['OK', signed.id, true, '']);
+    await expect(promise).resolves.toEqual({ ok: true, ackCount: 4, relayCount: 4 });
     expect(sockets.every(socket => socket.readyState === 3)).toBe(true);
+  });
+
+  it('reports partial coverage (N of M) when only some relays ack', async () => {
+    const { pk, d } = generateUpdateChannel();
+    const event = makeEvent({ pk, d });
+    const promise = publishCurrentVersion(event, encodeEventData(event));
+    const sockets = FakeWebSocket.instances;
+    sockets[0].open();
+    sockets[1].open();
+    const id = sockets[0].sent[0][1].id;
+    // One real ack, one rejection, two unreachable relays: the change is
+    // out there, but the organizer must hear "1 of 4", not "published".
+    sockets[0].message(['OK', id, true, '']);
+    sockets[1].message(['OK', id, false, 'blocked: nope']);
+    sockets[2].fail();
+    sockets[3].fail();
+    await expect(promise).resolves.toEqual({ ok: true, ackCount: 1, relayCount: 4 });
+  });
+
+  it('keeps collecting acks until the timeout when some relays stay silent', async () => {
+    vi.useFakeTimers();
+    const { pk, d } = generateUpdateChannel();
+    const event = makeEvent({ pk, d });
+    const promise = publishCurrentVersion(event, encodeEventData(event));
+    const sockets = FakeWebSocket.instances;
+    sockets.forEach(socket => socket.open());
+    const id = sockets[0].sent[0][1].id;
+    sockets[0].message(['OK', id, true, '']);
+    sockets[1].message(['OK', id, true, '']);
+    // sockets[2] and sockets[3] never answer: the overall timeout closes
+    // the round and the count reflects what actually landed.
+    vi.advanceTimersByTime(5000);
+    await expect(promise).resolves.toEqual({ ok: true, ackCount: 2, relayCount: 4 });
   });
 
   it('uses the relay override from localStorage', async () => {
@@ -247,39 +289,42 @@ describe('publishCurrentVersion', () => {
     const promise = publishCurrentVersion(event, encodeEventData(event));
     expect(FakeWebSocket.instances.map(socket => socket.url)).toEqual(['wss://self.hosted']);
     FakeWebSocket.instances[0].fail();
-    await expect(promise).resolves.toBe(false);
+    await expect(promise).resolves.toEqual({ ok: false, ackCount: 0, relayCount: 1 });
   });
 
-  it('ignores OK for other ids and OK=false, resolving true only on a real ack', async () => {
+  it('ignores OK frames for other event ids', async () => {
     const { pk, d } = generateUpdateChannel();
     const event = makeEvent({ pk, d });
     const promise = publishCurrentVersion(event, encodeEventData(event));
     const sockets = FakeWebSocket.instances;
     sockets[0].open();
-    sockets[1].open();
     const id = sockets[0].sent[0][1].id;
     sockets[0].message(['OK', 'f'.repeat(64), true, '']);
-    sockets[0].message(['OK', id, false, 'blocked: nope']);
-    sockets[1].message(['OK', id, true, '']);
-    await expect(promise).resolves.toBe(true);
+    // The foreign OK neither counts as an ack nor settles this relay.
+    expect(sockets[0].readyState).toBe(1);
+    sockets[0].message(['OK', id, true, '']);
+    sockets[1].fail();
+    sockets[2].fail();
+    sockets[3].fail();
+    await expect(promise).resolves.toEqual({ ok: true, ackCount: 1, relayCount: 4 });
   });
 
-  it('resolves false when relays stay silent past the timeout', async () => {
+  it('reports zero coverage when relays stay silent past the timeout', async () => {
     vi.useFakeTimers();
     const { pk, d } = generateUpdateChannel();
     const event = makeEvent({ pk, d });
     const promise = publishCurrentVersion(event, encodeEventData(event));
     FakeWebSocket.instances.forEach(socket => socket.open());
     vi.advanceTimersByTime(5000);
-    await expect(promise).resolves.toBe(false);
+    await expect(promise).resolves.toEqual(NO_PUBLISH);
   });
 
-  it('resolves false when every socket fails, without waiting for the timeout', async () => {
+  it('reports zero coverage when every socket fails, without waiting for the timeout', async () => {
     const { pk, d } = generateUpdateChannel();
     const event = makeEvent({ pk, d });
     const promise = publishCurrentVersion(event, encodeEventData(event));
     FakeWebSocket.instances.forEach(socket => socket.fail());
-    await expect(promise).resolves.toBe(false);
+    await expect(promise).resolves.toEqual(NO_PUBLISH);
   });
 });
 
@@ -392,5 +437,105 @@ describe('fetchLatestUpdate', () => {
     const promise = fetchLatestUpdate({ pk: channel.pk, d: channel.d });
     FakeWebSocket.instances.forEach(socket => socket.fail());
     await expect(promise).resolves.toBeNull();
+  });
+});
+
+describe('freshness floor (replay protection)', () => {
+  // Runs one full fetch round where the first relay serves the given
+  // signed events and every other relay is empty.
+  function fetchServing(updates, signedEvents) {
+    const promise = fetchLatestUpdate(updates);
+    const sockets = FakeWebSocket.instances;
+    FakeWebSocket.instances = [];
+    sockets[0].open();
+    const subId = sockets[0].sent[0][1];
+    for (const signed of signedEvents) {
+      sockets[0].message(['EVENT', subId, signed]);
+    }
+    sockets[0].message(['EOSE', subId]);
+    eoseAll(sockets, [sockets[0]]);
+    return promise;
+  }
+
+  it('ignores a replayed older version once a newer one has been verified', async () => {
+    const channel = makeChannel();
+    const updates = { pk: channel.pk, d: channel.d };
+    const v1 = signVersion(channel, makeEvent(channel), 1000);
+    const v2 = signVersion(channel, makeEvent(channel, { title: 'Moved!' }), 2000);
+
+    const first = await fetchServing(updates, [v2.signed]);
+    expect(first.createdAt).toBe(2000);
+    // The floor persists across page loads, not just within this session.
+    expect(localStorage.getItem(`evento.seen.${channel.pk}.${channel.d}`)).not.toBeNull();
+
+    // Replay attack: someone archived the old signed version and now only
+    // that one is served. It is authentic but stale — it must not win.
+    const second = await fetchServing(updates, [v1.signed]);
+    expect(second).toBeNull();
+  });
+
+  it('does not let an older signed version resurrect a cancelled event', async () => {
+    const channel = makeChannel();
+    const updates = { pk: channel.pk, d: channel.d };
+    const confirmed = signVersion(channel, makeEvent(channel), 1000);
+    const cancelled = signVersion(channel, makeEvent(channel, { status: 'cancelled' }), 2000);
+
+    const first = await fetchServing(updates, [cancelled.signed]);
+    expect(first.event.status).toBe('cancelled');
+
+    // Re-publishing the archived confirmed version must not "un-cancel"
+    // the event for anyone who already saw the cancellation.
+    const second = await fetchServing(updates, [confirmed.signed]);
+    expect(second).toBeNull();
+  });
+
+  it('still returns the version equal to the floor, so re-views keep converging', async () => {
+    const channel = makeChannel();
+    const updates = { pk: channel.pk, d: channel.d };
+    const v2 = signVersion(channel, makeEvent(channel, { title: 'Latest' }), 2000);
+
+    await fetchServing(updates, [v2.signed]);
+    // A viewer holding an old link re-fetches on every view: the exact
+    // version at the floor must stay visible, only STRICTLY older ones die.
+    const again = await fetchServing(updates, [v2.signed]);
+    expect(again).not.toBeNull();
+    expect(again.encoded).toBe(v2.encoded);
+  });
+
+  it('breaks same-created_at ties deterministically by smallest id', async () => {
+    const channel = makeChannel();
+    const updates = { pk: channel.pk, d: channel.d };
+    const a = signVersion(channel, makeEvent(channel, { title: 'Version A' }), 1500);
+    const b = signVersion(channel, makeEvent(channel, { title: 'Version B' }), 1500);
+    const [smaller, larger] = a.signed.id < b.signed.id ? [a, b] : [b, a];
+
+    // Seeing the larger-id version first does not lock it in: the smaller
+    // id outranks it (same convention as pickLatest / relay replacement).
+    const first = await fetchServing(updates, [larger.signed]);
+    expect(first.encoded).toBe(larger.encoded);
+    const second = await fetchServing(updates, [smaller.signed]);
+    expect(second).not.toBeNull();
+    expect(second.encoded).toBe(smaller.encoded);
+    // After that the larger id ranks below the floor and is a replay.
+    const third = await fetchServing(updates, [larger.signed]);
+    expect(third).toBeNull();
+  });
+
+  it('raises the floor on publish, so nothing older can come back to this device', async () => {
+    const { pk, d } = generateUpdateChannel();
+    const record = JSON.parse(localStorage.getItem('evento.sk.' + pk));
+    const channel = { sk: hexToBytes(record.sk), pk, d };
+    const old = signVersion(channel, makeEvent(channel, { title: 'Archived' }), 1000);
+
+    // Publish a fresh version (created_at = now); even with every relay
+    // down, this browser signed it and must never fall back behind it.
+    const cancelledNow = makeEvent(channel, { status: 'cancelled' });
+    const publishPromise = publishCurrentVersion(cancelledNow, encodeEventData(cancelledNow));
+    FakeWebSocket.instances.forEach(socket => socket.fail());
+    FakeWebSocket.instances = [];
+    await publishPromise;
+
+    const replay = await fetchServing({ pk, d }, [old.signed]);
+    expect(replay).toBeNull();
   });
 });

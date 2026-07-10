@@ -29,6 +29,7 @@ export const DEFAULT_RELAYS = [
 
 const RELAYS_KEY = 'evento.relays';
 const SECRET_KEY_PREFIX = 'evento.sk.';
+const SEEN_FLOOR_PREFIX = 'evento.seen.';
 const PENDING_PUBLISH_KEY = 'evento.pendingPublish';
 const PUBLISH_TIMEOUT_MS = 5000;
 const FETCH_TIMEOUT_MS = 4000;
@@ -180,6 +181,53 @@ export function consumePendingPublish(encoded) {
   return true;
 }
 
+/**
+ * Freshness floor: the rank { t: created_at, id } of the newest FULLY
+ * verified version this browser has accepted on a channel, persisted under
+ * 'evento.seen.<pk>.<d>'. Candidates ranking below it are replays of an
+ * older signed version and are ignored — so a cancelled event can never be
+ * "resurrected" by republishing an archived confirmed version. The rank
+ * order matches pickLatest: higher created_at wins; at equal created_at
+ * the lexicographically smallest event id wins (the deterministic
+ * tie-break for the "same created_at, different payload" case).
+ */
+function seenFloorKey(updates) {
+  return SEEN_FLOOR_PREFIX + updates.pk + '.' + updates.d;
+}
+
+function readSeenFloor(updates) {
+  try {
+    const record = JSON.parse(localStorage.getItem(seenFloorKey(updates)));
+    if (record && typeof record.t === 'number' && typeof record.id === 'string') {
+      return record;
+    }
+  } catch {
+    // missing or malformed: no floor
+  }
+  return null;
+}
+
+// True when a verified candidate is at least as fresh as the floor. Equal
+// rank passes too, so re-viewing the already-accepted version keeps working.
+function meetsSeenFloor(updates, createdAt, id) {
+  const floor = readSeenFloor(updates);
+  return !floor || createdAt > floor.t || (createdAt === floor.t && id <= floor.id);
+}
+
+// Raises the floor monotonically; never lowers it. Call ONLY with versions
+// whose signature and channel addressing have been fully verified (or that
+// this browser just signed itself).
+function raiseSeenFloor(updates, createdAt, id) {
+  try {
+    const floor = readSeenFloor(updates);
+    if (!floor || createdAt > floor.t || (createdAt === floor.t && id < floor.id)) {
+      localStorage.setItem(seenFloorKey(updates), JSON.stringify({ t: createdAt, id }));
+    }
+  } catch {
+    // storage unavailable: the floor is best-effort hardening
+  }
+}
+
 function closeQuietly(socket) {
   try {
     socket.close();
@@ -238,25 +286,37 @@ function withRelays(relays, timeoutMs, handle, onFinish) {
 }
 
 /**
- * Publishes the current (signed) version to every configured relay.
- * Resolves true as soon as one relay acknowledges with OK, false after
- * the overall timeout or when every relay failed. Never rejects. No-op
- * (false) without an updates pointer or without the channel's secret.
+ * Publishes the current (signed) version to every configured relay and
+ * reports honest coverage: instead of resolving at the first OK, it keeps
+ * collecting acks until every relay has answered (OK, error or close) or
+ * the overall timeout fires. Resolves { ok, ackCount, relayCount } with
+ * ok true when at least one relay acknowledged, so callers can tell a
+ * full publish from "landed on 1 relay out of 4". Never rejects. No-op
+ * ({ ok: false, ackCount: 0, relayCount }) without an updates pointer or
+ * without the channel's secret.
  */
 export async function publishCurrentVersion(normalizedEvent, encoded) {
+  let relayCount = 0;
+  let ackCount = 0;
   try {
+    const relays = getRelays();
+    relayCount = relays.length;
     const updates = normalizedEvent && normalizedEvent.updates;
     if (!updates || !ownsChannel(updates)) {
-      return false;
+      return { ok: false, ackCount, relayCount };
     }
     const secret = hexToBytes(readSecretRecord(updates.pk).sk);
     const template = buildUpdateTemplate(normalizedEvent, encoded, Math.floor(Date.now() / 1000));
     const signed = finalizeEvent(template, secret);
+    // This browser just signed this version, so it is trivially verified:
+    // raise the freshness floor before any relay round-trip, so no relay
+    // can later feed an older archived version back to this device.
+    raiseSeenFloor(updates, signed.created_at, signed.id);
     const frame = JSON.stringify(['EVENT', signed]);
-    return await withRelays(
-      getRelays(),
+    await withRelays(
+      relays,
       PUBLISH_TIMEOUT_MS,
-      (socket, markDone, finish) => {
+      (socket, markDone) => {
         socket.onopen = () => {
           try {
             socket.send(frame);
@@ -269,20 +329,20 @@ export async function publishCurrentVersion(normalizedEvent, encoded) {
             const reply = JSON.parse(message.data);
             if (reply[0] === 'OK' && reply[1] === signed.id) {
               if (reply[2] === true) {
-                finish(true);
-              } else {
-                markDone();
+                ackCount += 1;
               }
+              markDone();
             }
           } catch {
             // ignore malformed relay frames
           }
         };
       },
-      () => false
+      () => null
     );
+    return { ok: ackCount > 0, ackCount, relayCount };
   } catch {
-    return false;
+    return { ok: false, ackCount, relayCount };
   }
 }
 
@@ -291,7 +351,9 @@ export async function publishCurrentVersion(normalizedEvent, encoded) {
  * each candidate client-side (relays are untrusted): valid signature,
  * payload addressed to this exact channel, payload decodable, and the
  * decoded event's own updates pointer equal to {pk, d} — an update may
- * not silently re-point the channel. Returns
+ * not silently re-point the channel. The persisted freshness floor is
+ * then applied so verified-but-older replays are ignored (an old signed
+ * version can never roll back a newer one). Returns
  * { event: <normalized>, createdAt, encoded } or null. Never rejects.
  */
 export async function fetchLatestUpdate(updates) {
@@ -369,6 +431,15 @@ export async function fetchLatestUpdate(updates) {
     if (!winner) {
       return null;
     }
+    // Freshness floor: a correctly signed but OLDER version is a replay
+    // (e.g. someone re-publishing an archived confirmed version after a
+    // cancellation) and must not travel backwards. Applying the floor to
+    // the winner covers every candidate, since the winner is the maximum
+    // under the same ordering.
+    if (!meetsSeenFloor(updates, winner.created_at, winner.id)) {
+      return null;
+    }
+    raiseSeenFloor(updates, winner.created_at, winner.id);
     const match = candidates.find(candidate => candidate.signed === winner);
     return { event: match.decoded, createdAt: winner.created_at, encoded: match.encoded };
   } catch {

@@ -40,7 +40,7 @@ vi.mock('./services/updates/updatesService.js', () => ({
   markPendingPublish: vi.fn(),
   peekPendingPublish: vi.fn(() => false),
   clearPendingPublish: vi.fn(),
-  publishCurrentVersion: vi.fn(() => Promise.resolve(true)),
+  publishCurrentVersion: vi.fn(() => Promise.resolve({ ok: true, ackCount: 4, relayCount: 4 })),
   fetchLatestUpdate: vi.fn(() => Promise.resolve(null))
 }));
 
@@ -420,6 +420,7 @@ describe('App.js', () => {
       });
       const eventView = document.querySelector('event-view');
       eventView.applyUpdate = vi.fn();
+      eventView.showPublishPartial = vi.fn();
 
       cleanupFn = initApp();
       document.dispatchEvent(new Event('DOMContentLoaded'));
@@ -433,12 +434,14 @@ describe('App.js', () => {
       expect(clearPendingPublish).toHaveBeenCalled();
       expect(fetchLatestUpdate).not.toHaveBeenCalled();
       expect(eventView.applyUpdate).not.toHaveBeenCalled();
+      // Full coverage: no partial-publish note.
+      expect(eventView.showPublishPartial).not.toHaveBeenCalled();
     });
 
     it('should warn but keep the gate armed when publishing fails', async () => {
       decodeEventData.mockReturnValueOnce(decodedWithUpdates);
       peekPendingPublish.mockReturnValueOnce(true);
-      publishCurrentVersion.mockResolvedValueOnce(false);
+      publishCurrentVersion.mockResolvedValueOnce({ ok: false, ackCount: 0, relayCount: 4 });
 
       setupLocationMock({
         pathname: '/event/test-event',
@@ -454,6 +457,31 @@ describe('App.js', () => {
 
       await vi.waitFor(() => expect(eventView.showPublishWarning).toHaveBeenCalled());
       expect(clearPendingPublish).not.toHaveBeenCalled();
+    });
+
+    it('should report N of M coverage when the publish lands on only some relays', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      peekPendingPublish.mockReturnValueOnce(true);
+      publishCurrentVersion.mockResolvedValueOnce({ ok: true, ackCount: 1, relayCount: 4 });
+
+      setupLocationMock({
+        pathname: '/event/test-event',
+        href: 'http://localhost/event/test-event',
+        origin: 'http://localhost',
+        search: ''
+      });
+      const eventView = document.querySelector('event-view');
+      eventView.showPublishPartial = vi.fn();
+      eventView.showPublishWarning = vi.fn();
+
+      cleanupFn = initApp();
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+
+      // The change IS published (gate cleared), but the organizer must not
+      // hear an unqualified "published" when 3 of 4 relays missed it.
+      await vi.waitFor(() => expect(eventView.showPublishPartial).toHaveBeenCalledWith(1, 4));
+      expect(clearPendingPublish).toHaveBeenCalled();
+      expect(eventView.showPublishWarning).not.toHaveBeenCalled();
     });
 
     it('should apply a newer relay version on an ordinary view', async () => {
