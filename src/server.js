@@ -49,7 +49,11 @@ export function buildServer({ root = join(__dirname, '../dist') } = {}) {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
         fontSrc: ["'self'", 'https://cdnjs.cloudflare.com'],
-        connectSrc: ["'self'", 'wss:']
+        connectSrc: ["'self'", 'wss:'],
+        // Helmet's default would upgrade same-origin asset requests to
+        // https: even on http-served pages, breaking plain-HTTP
+        // self-hosting (npm start with no TLS in front).
+        upgradeInsecureRequests: null
       }
     }
   });

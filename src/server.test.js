@@ -109,6 +109,8 @@ describe('server wiring', () => {
     const csp = res.headers['content-security-policy'];
     expect(csp).toContain("default-src 'self'");
     expect(csp).not.toContain("script-src 'self' 'unsafe-inline'");
+    // Would force https: on assets and break plain-HTTP self-hosting.
+    expect(csp).not.toContain('upgrade-insecure-requests');
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
   });
 });
