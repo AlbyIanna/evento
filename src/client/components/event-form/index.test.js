@@ -77,6 +77,23 @@ describe('EventForm Component', () => {
     expect(cancelButton.classList.contains('hidden')).toBe(true);
   });
 
+  it('should have decorative inline SVG icons properly marked', async () => {
+    const icons = eventForm.$$('svg.icon');
+
+    expect(icons.length).toBeGreaterThan(0);
+    icons.forEach(icon => {
+      expect(icon.getAttribute('aria-hidden')).toBe('true');
+      expect(icon.getAttribute('focusable')).toBe('false');
+      expect(icon.getAttribute('fill')).toBe('currentColor');
+    });
+  });
+
+  it('should not load any third-party resources from its template', async () => {
+    // Icons are inline SVG: no icon-font stylesheet, no external URLs at all.
+    expect(eventForm.shadowRoot.querySelectorAll('link')).toHaveLength(0);
+    expect(templateContent).not.toMatch(/https?:\/\//);
+  });
+
   it('should render the form with update and cancel buttons in edit mode', async () => {
     // Set edit mode
     eventForm.setEditMode(true);

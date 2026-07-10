@@ -47,8 +47,8 @@ export default defineConfig({
     // In the future you can pass an object to override or extend the defaults.
     cspPlugin({
       'default-src': ["'self'"],
-      'style-src': ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
-      'font-src': ["'self'", 'https://cdnjs.cloudflare.com'],
+      'style-src': ["'self'", "'unsafe-inline'"],
+      'font-src': ["'self'"],
       // Update channel WebSockets. 'wss:' must stay a scheme wildcard
       // because the relay list is user-configurable (localStorage
       // 'evento.relays'); the plaintext localhost relay is for the e2e

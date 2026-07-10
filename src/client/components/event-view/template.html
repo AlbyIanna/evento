@@ -1,23 +1,30 @@
 <style>
   @import '/components/event-view/styles.css';
 </style>
-<!-- Font Awesome for icons -->
-<link
-  rel="stylesheet"
-  href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-/>
 <div class="event-view-container" role="region" aria-label="Event Details">
   <div id="update-banner" class="update-banner hidden" role="status" aria-live="polite">
-    <i class="fas fa-rotate" aria-hidden="true"></i> <span id="update-banner-text"></span>
+    <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+      <path
+        d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"
+      />
+    </svg>
+    <span id="update-banner-text"></span>
   </div>
   <div id="publish-warning" class="publish-warning hidden" role="alert">
-    <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+    <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+      <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+    </svg>
     <span id="publish-warning-text"
       >Couldn't reach the relays — your change isn't published yet. Reopen this link to retry.</span
     >
   </div>
   <a href="#" id="edit-button" class="edit-button hidden" aria-label="Edit event details"
-    ><i class="fas fa-edit" aria-hidden="true"></i> Edit</a
+    ><svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+      <path
+        d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+      />
+    </svg>
+    Edit</a
   >
   <h1 id="event-title" tabindex="0"></h1>
   <section class="event-details">
@@ -31,12 +38,45 @@
   </section>
   <div class="button-container">
     <button id="share-button" class="share-button" aria-label="Share event with others">
-      <i class="fas fa-share-alt" aria-hidden="true"></i> Share Event
+      <svg
+        class="icon"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path
+          d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"
+        />
+      </svg>
+      Share Event
     </button>
     <button id="copy-button" class="copy-button" aria-label="Copy event URL to clipboard">
-      <span id="copy-default"><i class="fas fa-copy" aria-hidden="true"></i> Copy URL</span>
+      <span id="copy-default"
+        ><svg
+          class="icon"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"
+          />
+        </svg>
+        Copy URL</span
+      >
       <span id="copy-success" class="hidden" aria-live="polite"
-        ><i class="fas fa-check" aria-hidden="true"></i> Copied!</span
+        ><svg
+          class="icon"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+        </svg>
+        Copied!</span
       >
     </button>
     <a
@@ -45,7 +85,18 @@
       href="#"
       download="evento.ics"
       aria-label="Download calendar file"
-      ><i class="fas fa-calendar-plus" aria-hidden="true"></i> Add to Calendar</a
+      ><svg
+        class="icon"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path
+          d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13zm-7-11h-2v3H8v2h3v3h2v-3h3v-2h-3v-3z"
+        />
+      </svg>
+      Add to Calendar</a
     >
     <a
       id="gcal-button"
@@ -53,10 +104,26 @@
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Open in Google Calendar"
-      ><i class="fab fa-google" aria-hidden="true"></i> Google Calendar</a
+      ><svg
+        class="icon"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path
+          d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z"
+        />
+      </svg>
+      Google Calendar</a
     >
   </div>
   <div id="copy-popup" class="copy-popup hidden" role="status" aria-live="polite">
-    <i class="fas fa-check-circle" aria-hidden="true"></i> URL copied!
+    <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+      <path
+        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
+      />
+    </svg>
+    URL copied!
   </div>
 </div>

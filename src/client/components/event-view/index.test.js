@@ -371,12 +371,21 @@ describe('EventView Component', () => {
     expect(copyPopup.getAttribute('aria-live')).toBe('polite');
   });
 
-  it('should have decorative icons properly marked', async () => {
-    const icons = eventView.$$('i');
+  it('should have decorative inline SVG icons properly marked', async () => {
+    const icons = eventView.$$('svg.icon');
 
+    expect(icons.length).toBeGreaterThan(0);
     icons.forEach(icon => {
       expect(icon.getAttribute('aria-hidden')).toBe('true');
+      expect(icon.getAttribute('focusable')).toBe('false');
+      expect(icon.getAttribute('fill')).toBe('currentColor');
     });
+  });
+
+  it('should not load any third-party resources from its template', async () => {
+    // Icons are inline SVG: no icon-font stylesheet, no external URLs at all.
+    expect(eventView.shadowRoot.querySelectorAll('link')).toHaveLength(0);
+    expect(templateContent).not.toMatch(/https?:\/\//);
   });
 
   it('should handle keyboard navigation correctly', async () => {

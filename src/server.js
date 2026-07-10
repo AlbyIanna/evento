@@ -47,8 +47,9 @@ export function buildServer({ root = join(__dirname, '../dist') } = {}) {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
-        fontSrc: ["'self'", 'https://cdnjs.cloudflare.com'],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        // Explicit: helmet's default font-src allows https: and data:
+        fontSrc: ["'self'"],
         connectSrc: ["'self'", 'wss:'],
         // Helmet's default would upgrade same-origin asset requests to
         // https: even on http-served pages, breaking plain-HTTP

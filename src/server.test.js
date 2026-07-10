@@ -109,6 +109,11 @@ describe('server wiring', () => {
     const csp = res.headers['content-security-policy'];
     expect(csp).toContain("default-src 'self'");
     expect(csp).not.toContain("script-src 'self' 'unsafe-inline'");
+    // Icons are inline SVG since the Font Awesome CDN was dropped: the
+    // base path must work with zero third-party origins.
+    expect(csp).not.toContain('cdnjs.cloudflare.com');
+    expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(csp).toContain("font-src 'self'");
     // Would force https: on assets and break plain-HTTP self-hosting.
     expect(csp).not.toContain('upgrade-insecure-requests');
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
