@@ -13,6 +13,7 @@ export default [
     files: ['**/*.js'],
     languageOptions: {
       globals: {
+        ...globals.es2021,
         ...globals.browser,
         ...globals.node
       }

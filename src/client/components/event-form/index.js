@@ -84,8 +84,10 @@ export class EventForm extends BaseComponent {
         this.updateValidationSummary();
       });
 
-      if (input.id === 'datetime') {
-        // Get the next 9pm date/time
+      if (input.id === 'datetime' && !input.value) {
+        // Default to the next 9pm, but never clobber a value already
+        // filled in (e.g. by edit mode, whose fillForm can run first
+        // because the template loads asynchronously)
         input.value = getNext9PM();
       }
     });
@@ -158,10 +160,11 @@ export class EventForm extends BaseComponent {
     if (titleInput) titleInput.value = data.title || '';
 
     // Handle date formatting for datetime-local input
+    const startValue = data.start || data.datetime;
     if (datetimeInput) {
-      if (data.datetime) {
-        // Direct assignment if datetime is already in correct format
-        datetimeInput.value = data.datetime;
+      if (startValue && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(startValue)) {
+        // datetime-local inputs accept minute precision only
+        datetimeInput.value = startValue.slice(0, 16);
       } else if (data.date && data.time) {
         // Reconstruct datetime from separate date and time
         try {

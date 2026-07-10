@@ -231,7 +231,8 @@ describe('App.js', () => {
     // Check that the encodeEventData function was called with the correct data
     expect(encodeEventData).toHaveBeenCalledWith({
       title: 'Test Event',
-      datetime: '2024-01-01T12:00',
+      start: '2024-01-01T12:00',
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
       location: 'Test Location',
       description: 'Test Description'
     });

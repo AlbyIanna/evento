@@ -79,11 +79,11 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./test/setup.js'],
-    include: ['./**/*.test.js'],
+    include: ['./**/*.test.js', '../shared/**/*.test.js'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['./**/*.js'],
+      include: ['./**/*.js', '../shared/**/*.js'],
       exclude: ['./test/**']
     }
   }

@@ -14,7 +14,8 @@ export function handleFormSubmit(e) {
     const { formData } = e.detail;
     const eventData = {
       title: formData.get('title').trim(),
-      datetime: formData.get('datetime'),
+      start: formData.get('datetime'),
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
       location: formData.get('location').trim(),
       description: formData.get('description').trim()
     };
@@ -50,10 +51,19 @@ export function displayEvent(encodedEvent) {
 
     // Format date if needed
     let formattedEventData = { ...eventData };
-    if (eventData.datetime) {
-      const datetime = new Date(eventData.datetime);
-      formattedEventData.date = formatDate(datetime.toISOString());
-      formattedEventData.time = formatTime(datetime.toTimeString().split(' ')[0]);
+    const start = eventData.start || eventData.datetime;
+    if (start) {
+      if (eventData.tz && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(start)) {
+        // v2 events: start is the wall-clock time in the event's own
+        // timezone — display it as-is, without viewer-local conversion.
+        formattedEventData.date = formatDate(start);
+        formattedEventData.time = formatTime(start.slice(11, 16));
+      } else {
+        // Legacy v1 events keep their historical "floating time" rendering.
+        const datetime = new Date(start);
+        formattedEventData.date = formatDate(datetime.toISOString());
+        formattedEventData.time = formatTime(datetime.toTimeString().split(' ')[0]);
+      }
     }
 
     // Update event view
@@ -98,7 +108,11 @@ export function handleEventUpdated(e) {
   try {
     appState.setState({ isLoading: true });
     const { eventData } = e.detail;
-    const encodedEvent = encodeEventData(eventData);
+    const encodedEvent = encodeEventData({
+      ...eventData,
+      start: eventData.start || eventData.datetime,
+      tz: eventData.tz || Intl.DateTimeFormat().resolvedOptions().timeZone
+    });
     const shareUrl = `${window.location.origin}/event/${encodedEvent}?canEdit`;
     window.location.href = shareUrl;
   } catch (error) {
