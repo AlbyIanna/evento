@@ -2,6 +2,8 @@
 
 A modern event-sharing application built with Fastify and Vite, designed to make event management and sharing simple and efficient.
 
+**Live at [eventone.netlify.app](https://eventone.netlify.app)** — no signup, just create an event and share the link.
+
 ## Features
 
 - **Simple Event Creation**: Create and customize events with an intuitive form interface
@@ -178,6 +180,16 @@ describe('Component', () => {
    - Implement proper caching
 
 ## Deployment
+
+### Live Instance
+
+The reference instance is hosted on Netlify (project **`eventone`**):
+
+- **Production**: <https://eventone.netlify.app> — deployed automatically on every push to `main`
+- **Deploy previews**: every pull request gets its own preview at `https://deploy-preview-<PR>--eventone.netlify.app`, with Functions (`/ics/`) and the Edge Function (link-preview cards) active
+- **Dashboard**: <https://app.netlify.com/projects/eventone> (deploy status, logs, rollbacks)
+
+Because the app is stateless, any fork can be deployed the same way and will read event links produced by any other instance (see [docs/event-format.md](docs/event-format.md)).
 
 The application is deployed using Netlify's native Git integration:
 
