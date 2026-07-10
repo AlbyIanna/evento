@@ -1,4 +1,5 @@
 import { appState } from './stateManager.js';
+import { t } from '../i18n.js';
 
 /**
  * Set loading state for buttons and optionally update app state
@@ -11,7 +12,7 @@ export function setLoading(loading, updateState = false) {
     button.disabled = loading;
     if (loading) {
       button.dataset.originalText = button.textContent;
-      button.textContent = 'Loading...';
+      button.textContent = t('app.loading');
     } else {
       button.textContent = button.dataset.originalText || button.textContent;
     }

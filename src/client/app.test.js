@@ -3,6 +3,7 @@ import { setupLocationMock } from './test/test-utils';
 import { initApp, parseFragment } from './app.js';
 import userEvent from '@testing-library/user-event';
 import { encodeEventData, decodeEventData } from './utils/eventUtils.js';
+import { formatDate, formatTime } from './services/date/dateService.js';
 import { appState } from './utils/stateManager.js';
 import {
   generateUpdateChannel,
@@ -162,6 +163,61 @@ describe('App.js', () => {
     // Verify that appState was updated for loading state
     expect(appState.setState).toHaveBeenCalledWith({ isLoading: true });
     expect(appState.setState).toHaveBeenCalledWith({ isLoading: false });
+
+    // Dates are formatted in the locale of the UI language (English in the
+    // test environment, whose navigator.language is en-US).
+    expect(formatDate.mock.calls[0][1]).toBe('en-US');
+    expect(formatTime.mock.calls[0][1]).toBe('en-US');
+  });
+
+  it('should format dates with the Italian locale when the UI language is Italian', async () => {
+    localStorage.setItem('evento.lang', 'it');
+    try {
+      setupLocationMock({
+        pathname: '/event/test-event',
+        href: 'http://localhost/event/test-event',
+        origin: 'http://localhost',
+        search: ''
+      });
+
+      cleanupFn = initApp();
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+
+      expect(formatDate.mock.calls[0][1]).toBe('it-IT');
+      expect(formatTime.mock.calls[0][1]).toBe('it-IT');
+    } finally {
+      localStorage.removeItem('evento.lang');
+    }
+  });
+
+  it('should include the organizer contact in the payload when provided', async () => {
+    setupLocationMock({
+      pathname: '/',
+      href: 'http://localhost/',
+      origin: 'http://localhost',
+      search: ''
+    });
+    cleanupFn = initApp();
+
+    const formData = new Map();
+    formData.set('title', 'Test Event');
+    formData.set('datetime', '2024-01-01T12:00');
+    formData.set('location', 'Test Location');
+    formData.set('description', 'Test Description');
+    formData.set('contact', ' marco@example.com ');
+
+    document.querySelector('event-form').dispatchEvent(
+      new CustomEvent('submit', {
+        detail: { formData, isEdit: false },
+        bubbles: true,
+        cancelable: true
+      })
+    );
+
+    // Trimmed and carried in the payload — the contact is part of the link.
+    expect(encodeEventData).toHaveBeenCalledWith(
+      expect.objectContaining({ contact: 'marco@example.com' })
+    );
   });
 
   it('should enter edit mode when URL path is /event/:id/edit', async () => {

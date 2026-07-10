@@ -8,6 +8,7 @@ import {
   clearValidation,
   showValidationError
 } from '../../services/validation/formValidation.js';
+import { t } from '../../i18n.js';
 
 export class EventForm extends BaseComponent {
   #isEditMode = false;
@@ -122,7 +123,7 @@ export class EventForm extends BaseComponent {
     const cancelEventButton = this.$('#cancel-event-button');
     if (cancelEventButton) {
       this.listen(cancelEventButton, 'click', () => {
-        if (window.confirm('Cancel this event for everyone who has the link?')) {
+        if (window.confirm(t('form.cancelConfirm'))) {
           this.dispatchEvent(new CustomEvent('cancel-event', { bubbles: true, composed: true }));
         }
       });
@@ -159,12 +160,17 @@ export class EventForm extends BaseComponent {
     });
   }
 
-  validateInput(input) {
-    // Get the error element
-    const errorId = input.getAttribute('aria-describedby');
-    const errorElement = this.$(`#${errorId}`);
+  // aria-describedby can reference several elements (hint + error); the
+  // error element is the one whose id ends in '-error'.
+  #errorElementFor(input) {
+    const errorId = (input.getAttribute('aria-describedby') || '')
+      .split(/\s+/)
+      .find(id => id.endsWith('-error'));
+    return errorId ? this.$(`#${errorId}`) : null;
+  }
 
-    return validateInput(input, errorElement);
+  validateInput(input) {
+    return validateInput(input, this.#errorElementFor(input));
   }
 
   validateForm() {
@@ -172,13 +178,12 @@ export class EventForm extends BaseComponent {
     const validationSummary = this.$('#validation-summary');
     const validationErrors = this.$('#validation-errors');
 
-    // Create a function to get the error element for an input
-    const getErrorElement = input => {
-      const errorId = input.getAttribute('aria-describedby');
-      return this.$(`#${errorId}`);
-    };
-
-    return validateForm(form, getErrorElement, validationSummary, validationErrors);
+    return validateForm(
+      form,
+      input => this.#errorElementFor(input),
+      validationSummary,
+      validationErrors
+    );
   }
 
   updateValidationSummary() {
@@ -218,6 +223,9 @@ export class EventForm extends BaseComponent {
 
     if (locationInput) locationInput.value = data.location || '';
     if (descriptionInput) descriptionInput.value = data.description || '';
+
+    const contactInput = this.$('#contact');
+    if (contactInput) contactInput.value = data.contact || '';
 
     const privateCheckbox = this.$('#private');
     if (privateCheckbox) privateCheckbox.checked = this.#privateLink;

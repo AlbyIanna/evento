@@ -1,4 +1,5 @@
 import { BaseComponent } from '../../utils/baseComponent.js';
+import { t } from '../../i18n.js';
 
 /**
  * Post-creation screen: shows the freshly minted event link with Share/Copy
@@ -102,7 +103,7 @@ export class LinkReady extends BaseComponent {
     if (navigator.share) {
       navigator
         .share({
-          title: this.#links.title || 'Event Details',
+          title: this.#links.title || t('view.shareTitleFallback'),
           url: this.#links.shareUrl
         })
         .catch(error => {

@@ -2,11 +2,16 @@
   @import '/components/event-form/styles.css';
 </style>
 <form id="event-form" novalidate>
-  <div id="cancelled-notice" class="field-warning hidden" role="alert">
+  <div
+    id="cancelled-notice"
+    class="field-warning hidden"
+    role="alert"
+    data-i18n="form.cancelledNotice"
+  >
     This event is cancelled. Saving will keep it cancelled for everyone who has the link.
   </div>
   <div class="form-group">
-    <label for="title">Event Title*</label>
+    <label for="title" data-i18n="form.titleLabel">Event Title*</label>
     <input
       type="text"
       id="title"
@@ -15,11 +20,12 @@
       aria-required="true"
       aria-describedby="title-error"
       placeholder="e.g. Alberto's Birthday Party"
+      data-i18n-attr="placeholder:form.titlePlaceholder"
     />
     <div id="title-error" class="field-error hidden" aria-live="polite"></div>
   </div>
   <div class="form-group">
-    <label for="datetime">Date*</label>
+    <label for="datetime" data-i18n="form.dateLabel">Date*</label>
     <input
       type="datetime-local"
       id="datetime"
@@ -31,7 +37,7 @@
     <div id="datetime-error" class="field-error hidden" aria-live="polite"></div>
   </div>
   <div class="form-group">
-    <label for="location">Location*</label>
+    <label for="location" data-i18n="form.locationLabel">Location*</label>
     <input
       type="text"
       id="location"
@@ -43,15 +49,33 @@
     <div id="location-error" class="field-error hidden" aria-live="polite"></div>
   </div>
   <div class="form-group">
-    <label for="description">Description</label>
+    <label for="description" data-i18n="form.descriptionLabel">Description</label>
     <textarea id="description" name="description" rows="4"></textarea>
   </div>
   <div class="form-group">
-    <label class="checkbox-label"
-      ><input type="checkbox" id="private" name="private" aria-describedby="private-hint" /> Private
-      link (no preview card)</label
+    <label for="contact" data-i18n="form.contactLabel"
+      >How can people reply to you? (optional)</label
     >
-    <div id="private-hint" class="field-hint">
+    <input
+      type="text"
+      id="contact"
+      name="contact"
+      aria-describedby="contact-hint contact-error"
+      placeholder="Email or phone number"
+      data-i18n-attr="placeholder:form.contactPlaceholder"
+    />
+    <div id="contact-hint" class="field-hint" data-i18n="form.contactHint">
+      Shown to everyone: this contact becomes part of the event link, visible to anyone who receives
+      it.
+    </div>
+    <div id="contact-error" class="field-error hidden" aria-live="polite"></div>
+  </div>
+  <div class="form-group">
+    <label class="checkbox-label"
+      ><input type="checkbox" id="private" name="private" aria-describedby="private-hint" />
+      <span data-i18n="form.privateLabel">Private link (no preview card)</span></label
+    >
+    <div id="private-hint" class="field-hint" data-i18n="form.privateHint">
       The event lives only in the link itself — it never reaches our server, so chats will not show
       a preview card. Opening it in an external calendar shares it with that provider.
     </div>
@@ -59,21 +83,28 @@
   <div class="form-group">
     <label class="checkbox-label"
       ><input type="checkbox" id="updatable" name="updatable" aria-describedby="updatable-hint" />
-      Updatable link</label
+      <span data-i18n="form.updatableLabel">Updatable link</span></label
     >
-    <div id="updatable-hint" class="field-hint">
+    <div id="updatable-hint" class="field-hint" data-i18n="form.updatableHint">
       Your browser keeps a signing key so you can push time changes or a cancellation to everyone
       who already has the link. Updates travel through public Nostr relays, where the event data is
       publicly readable.
     </div>
-    <div id="combined-warning" class="field-warning hidden" role="alert">
+    <div
+      id="combined-warning"
+      class="field-warning hidden"
+      role="alert"
+      data-i18n="form.combinedWarning"
+    >
       Even with a private link, updates put the event details on public Nostr relays where anyone
       can read them.
     </div>
   </div>
   <div class="button-container">
     <!-- Create mode button -->
-    <button type="submit" id="create-button">Create Event Link</button>
+    <button type="submit" id="create-button" data-i18n="form.createButton">
+      Create Event Link
+    </button>
 
     <!-- Edit mode buttons -->
     <button type="submit" id="update-button" class="hidden">
@@ -88,9 +119,14 @@
           d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"
         />
       </svg>
-      Generate New Link
+      <span data-i18n="form.updateButton">Generate New Link</span>
     </button>
-    <button type="button" id="cancel-event-button" class="danger-button hidden">
+    <button
+      type="button"
+      id="cancel-event-button"
+      class="danger-button hidden"
+      data-i18n="form.cancelEventButton"
+    >
       Cancel this event
     </button>
     <a id="cancel-button" class="cancel-button hidden" href=""
@@ -105,7 +141,7 @@
           d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
         />
       </svg>
-      Cancel</a
+      <span data-i18n="form.cancelButton">Cancel</span></a
     >
   </div>
   <div id="validation-summary" class="validation-summary hidden" aria-live="polite" role="alert">
@@ -122,7 +158,7 @@
             d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
           />
         </svg>
-        Please fix the following errors:</strong
+        <span data-i18n="form.validationHeading">Please fix the following errors:</span></strong
       >
     </p>
     <ul id="validation-errors"></ul>

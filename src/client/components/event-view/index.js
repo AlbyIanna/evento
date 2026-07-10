@@ -1,6 +1,8 @@
 import { BaseComponent } from '../../utils/baseComponent.js';
 import { appState } from '../../utils/stateManager.js';
 import { buildIcs, buildGoogleCalendarUrl } from '../../../shared/ics.js';
+import { isEmailContact, isPhoneContact } from '../../../shared/eventFormat.js';
+import { t } from '../../i18n.js';
 
 export class EventView extends BaseComponent {
   #eventData = null;
@@ -87,8 +89,12 @@ export class EventView extends BaseComponent {
     if (navigator.share) {
       navigator
         .share({
-          title: this.#eventData?.title || 'Event Details',
-          text: `Join me at ${this.#eventData?.title} on ${this.#eventData?.date} at ${this.#eventData?.time}`,
+          title: this.#eventData?.title || t('view.shareTitleFallback'),
+          text: t('view.shareText', {
+            title: this.#eventData?.title,
+            date: this.#eventData?.date,
+            time: this.#eventData?.time
+          }),
           // Drop the query string (canEdit) but keep the fragment, which
           // carries the whole event for private links
           url: window.location.origin + window.location.pathname + (window.location.hash || '')
@@ -133,7 +139,7 @@ export class EventView extends BaseComponent {
       })
       .catch(err => {
         console.error('Failed to copy URL:', err);
-        alert('Failed to copy event link. Please copy the URL manually.');
+        alert(t('view.copyFailed'));
       });
   }
 
@@ -187,9 +193,7 @@ export class EventView extends BaseComponent {
     }
     // Unhide before writing the text so the aria-live region announces it.
     banner.classList.remove('hidden');
-    bannerText.textContent = cancelled
-      ? 'This event was cancelled by the organizer.'
-      : 'This event was updated by the organizer — showing the latest version.';
+    bannerText.textContent = cancelled ? t('view.bannerCancelled') : t('view.bannerUpdated');
   }
 
   // Confirms an organizer-key import: this browser now holds the channel
@@ -215,8 +219,7 @@ export class EventView extends BaseComponent {
     if (text) {
       // Reset explicitly: a showPublishPartial from an earlier view in the
       // same session may have overwritten the default template text.
-      text.textContent =
-        "Couldn't reach the relays — your change isn't published yet. Reopen this link to retry.";
+      text.textContent = t('view.publishWarning');
     }
     warning.classList.remove('hidden');
   }
@@ -227,7 +230,7 @@ export class EventView extends BaseComponent {
     const warning = this.$('#publish-warning');
     const text = this.$('#publish-warning-text');
     if (!warning || !text) return;
-    text.textContent = `Published to ${ackCount} of ${relayCount} relays — some relays couldn't be reached.`;
+    text.textContent = t('view.publishPartial', { ack: ackCount, total: relayCount });
     warning.classList.remove('hidden');
   }
 
@@ -260,6 +263,33 @@ export class EventView extends BaseComponent {
     }
 
     this.#updateCalendarLinks(eventData);
+    this.#updateRsvpButton(eventData);
+  }
+
+  // Zero-infrastructure RSVP: when the payload carries an organizer contact,
+  // the button opens WhatsApp (phone) or the mail app (email) with a message
+  // prefilled in the UI language. The contact comes from an untrusted URL, so
+  // only the two recognized shapes ever become a link, and both hrefs are
+  // constructed here — never taken verbatim from the payload.
+  #updateRsvpButton(eventData) {
+    const rsvpButton = this.$('#rsvp-button');
+    if (!rsvpButton) return;
+
+    rsvpButton.classList.add('hidden');
+    const contact = typeof eventData.contact === 'string' ? eventData.contact.trim() : '';
+    if (!contact) return;
+
+    const message = t('view.rsvpMessage', { title: eventData.title || '' });
+    let href = null;
+    if (isEmailContact(contact)) {
+      href = `mailto:${contact}?body=${encodeURIComponent(message)}`;
+    } else if (isPhoneContact(contact)) {
+      href = `https://wa.me/${contact.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+    }
+    if (!href) return;
+
+    rsvpButton.setAttribute('href', href);
+    rsvpButton.classList.remove('hidden');
   }
 
   #updateCalendarLinks(eventData) {

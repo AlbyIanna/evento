@@ -714,6 +714,70 @@ describe('EventView Component', () => {
     expect(eventView.$('#organizer-hint').classList.contains('hidden')).toBe(false);
   });
 
+  describe('reply-to-organizer (RSVP) button', () => {
+    const baseEvent = {
+      title: 'Cena da Marco',
+      date: '04/15/2024',
+      time: '14:00',
+      location: 'Test Location'
+    };
+
+    it('stays hidden when the event carries no contact', () => {
+      eventView.setEventData(baseEvent);
+      expect(eventView.$('#rsvp-button').classList.contains('hidden')).toBe(true);
+    });
+
+    it('opens WhatsApp with a normalized number and a prefilled message for phone contacts', () => {
+      eventView.setEventData({ ...baseEvent, contact: '+39 333 123-4567' });
+
+      const rsvpButton = eventView.$('#rsvp-button');
+      expect(rsvpButton.classList.contains('hidden')).toBe(false);
+      expect(rsvpButton.getAttribute('href')).toBe(
+        `https://wa.me/393331234567?text=${encodeURIComponent('Hi! About "Cena da Marco"...')}`
+      );
+      // Opens in a new context without leaking the opener.
+      expect(rsvpButton.getAttribute('target')).toBe('_blank');
+      expect(rsvpButton.getAttribute('rel')).toContain('noopener');
+    });
+
+    it('opens the mail app with a prefilled body for email contacts', () => {
+      eventView.setEventData({ ...baseEvent, contact: 'marco@example.com' });
+
+      const rsvpButton = eventView.$('#rsvp-button');
+      expect(rsvpButton.classList.contains('hidden')).toBe(false);
+      expect(rsvpButton.getAttribute('href')).toBe(
+        `mailto:marco@example.com?body=${encodeURIComponent('Hi! About "Cena da Marco"...')}`
+      );
+    });
+
+    it('prefills the message in the active UI language', () => {
+      localStorage.setItem('evento.lang', 'it');
+      try {
+        eventView.setEventData({ ...baseEvent, contact: 'marco@example.com' });
+        expect(eventView.$('#rsvp-button').getAttribute('href')).toBe(
+          `mailto:marco@example.com?body=${encodeURIComponent('Ciao! Riguardo a "Cena da Marco"...')}`
+        );
+      } finally {
+        localStorage.removeItem('evento.lang');
+      }
+    });
+
+    it('never builds a link from an implausible contact (untrusted payload)', () => {
+      eventView.setEventData({ ...baseEvent, contact: 'javascript:alert(1)' });
+      const rsvpButton = eventView.$('#rsvp-button');
+      expect(rsvpButton.classList.contains('hidden')).toBe(true);
+      expect(rsvpButton.getAttribute('href')).toBeNull();
+    });
+
+    it('hides the button again when an update removes the contact', () => {
+      eventView.setEventData({ ...baseEvent, contact: 'marco@example.com' });
+      expect(eventView.$('#rsvp-button').classList.contains('hidden')).toBe(false);
+
+      eventView.applyUpdate({ ...baseEvent, status: 'confirmed' });
+      expect(eventView.$('#rsvp-button').classList.contains('hidden')).toBe(true);
+    });
+  });
+
   it('resets to the zero-coverage text when showPublishWarning follows showPublishPartial', async () => {
     // Same session, two publishes: a partial one mutated the warning text,
     // then a fully failed one must not show the stale "Published to N of M".

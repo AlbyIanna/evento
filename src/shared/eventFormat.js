@@ -17,6 +17,7 @@ export const LIMITS = {
   title: 200,
   location: 200,
   description: 2000,
+  contact: 200,
   encoded: 4096
 };
 
@@ -34,6 +35,41 @@ const STATUSES = ['confirmed', 'cancelled'];
 // Reserved pointer to the event's update channel (Nostr replaceable event):
 // pk = 64-char lowercase hex public key, d = addressable identifier.
 const NOSTR_PUBKEY_PATTERN = /^[0-9a-f]{64}$/;
+
+// Optional organizer contact for zero-infrastructure RSVP ("reply to
+// organizer"): a plausible email address or phone number, nothing else.
+// The email local/domain parts exclude URL metacharacters (? & # = /) so a
+// validated contact can be embedded verbatim in a mailto: href without
+// smuggling extra parameters or path segments.
+const EMAIL_CONTACT_PATTERN = /^[^\s@?&#=/]+@[^\s@?&#=/]+\.[^\s@?&#=/]+$/;
+// Optional leading '+', then digits with common grouping punctuation.
+const PHONE_CONTACT_PATTERN = /^\+?[0-9][0-9 ()./-]*$/;
+
+export function isEmailContact(value) {
+  return typeof value === 'string' && EMAIL_CONTACT_PATTERN.test(value.trim());
+}
+
+export function isPhoneContact(value) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const trimmed = value.trim();
+  if (!PHONE_CONTACT_PATTERN.test(trimmed)) {
+    return false;
+  }
+  const digits = trimmed.replace(/\D/g, '');
+  return digits.length >= 6 && digits.length <= 15;
+}
+
+/**
+ * Plausibility check for the optional `contact` field: an email address or
+ * a phone number. No verification — just enough shape to build a mailto:
+ * or wa.me link from it. Enforced on encode; decoders stay lenient and
+ * simply ignore implausible values when rendering.
+ */
+export function isPlausibleContact(value) {
+  return isEmailContact(value) || isPhoneContact(value);
+}
 
 export function isValidTimeZone(tz) {
   if (typeof tz !== 'string' || tz.length === 0) {
@@ -99,6 +135,11 @@ function validateV2(data) {
   if (typeof data.location !== 'string' || !isOptionalString(data.description)) {
     return false;
   }
+  // Shape only: plausibility is enforced on encode, so foreign payloads
+  // carrying a junk contact stay readable (renderers ignore the value).
+  if (data.contact !== undefined && data.contact !== null && typeof data.contact !== 'string') {
+    return false;
+  }
   if (data.status !== undefined && !STATUSES.includes(data.status)) {
     return false;
   }
@@ -140,7 +181,8 @@ export function validateEventData(data) {
 
 /**
  * Returns the canonical in-memory shape, whatever version was decoded:
- * { v, title, start, end, tz, location, description, status, updates }.
+ * { v, title, start, end, tz, location, description, contact, status,
+ * updates }.
  * v1 events get tz = null ("floating" wall-clock time, the historical
  * semantics) and status = 'confirmed'.
  */
@@ -154,6 +196,7 @@ export function normalizeEventData(data) {
       tz: null,
       location: data.location,
       description: typeof data.description === 'string' ? data.description : '',
+      contact: null,
       status: 'confirmed',
       updates: null
     };
@@ -166,6 +209,7 @@ export function normalizeEventData(data) {
     tz: data.tz,
     location: data.location,
     description: typeof data.description === 'string' ? data.description : '',
+    contact: typeof data.contact === 'string' && data.contact.length > 0 ? data.contact : null,
     status: data.status || 'confirmed',
     updates: data.updates || null
   };
@@ -215,6 +259,9 @@ export function encodeEventData(data) {
       ...(typeof data.description === 'string' && data.description.length > 0
         ? { description: data.description }
         : {}),
+      ...(typeof data.contact === 'string' && data.contact.length > 0
+        ? { contact: data.contact }
+        : {}),
       ...(data.status && data.status !== 'confirmed' ? { status: data.status } : {}),
       ...(data.updates ? { updates: data.updates } : {})
     };
@@ -224,9 +271,13 @@ export function encodeEventData(data) {
     if (
       payload.title.length > LIMITS.title ||
       payload.location.length > LIMITS.location ||
-      (payload.description !== undefined && payload.description.length > LIMITS.description)
+      (payload.description !== undefined && payload.description.length > LIMITS.description) ||
+      (payload.contact !== undefined && payload.contact.length > LIMITS.contact)
     ) {
       throw new Error('event data exceeds field limits');
+    }
+    if (payload.contact !== undefined && !isPlausibleContact(payload.contact)) {
+      throw new Error('contact must be a plausible email address or phone number');
     }
     const encoded = utf8ToBase64Url(JSON.stringify(payload));
     if (encoded.length > MAX_ENCODED_LENGTH) {

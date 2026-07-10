@@ -1,4 +1,5 @@
 import { formatDate, formatTime } from './services/date/dateService.js';
+import { t, getLanguage, getDateLocale, translateRoot } from './i18n.js';
 import { encodeEventData, decodeEventData, validateEventData } from './utils/eventUtils.js';
 import { setLoading, toggleContainers } from './utils/uiUtils.js';
 import { appState } from './utils/stateManager.js';
@@ -34,6 +35,13 @@ export function handleFormSubmit(e) {
       location: formData.get('location').trim(),
       description: formData.get('description').trim()
     };
+
+    // Optional organizer contact for the zero-infrastructure RSVP button;
+    // it becomes part of the payload (and thus of the link) only when set.
+    const contact = (formData.get('contact') || '').trim();
+    if (contact) {
+      eventData.contact = contact;
+    }
 
     if (e.detail.isEdit) {
       // Never generate a new channel on edit: old-link holders can only be
@@ -80,7 +88,7 @@ export function handleFormSubmit(e) {
     }
   } catch (error) {
     console.error('Form submission error:', error);
-    eventForm.showError('Failed to create event link. Please try again.');
+    eventForm.showError(t('form.submitError'));
   } finally {
     appState.setState({ isLoading: false });
   }
@@ -161,16 +169,19 @@ function formatForDisplay(eventData) {
   const formattedEventData = { ...eventData };
   const start = eventData.start || eventData.datetime;
   if (start) {
+    // Dates render in the language the UI speaks (e.g. "venerdì 13 marzo
+    // 2026" for Italian users), not a hardcoded locale.
+    const locale = getDateLocale();
     if (eventData.tz && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(start)) {
       // v2 events: start is the wall-clock time in the event's own
       // timezone — display it as-is, without viewer-local conversion.
-      formattedEventData.date = formatDate(start);
-      formattedEventData.time = formatTime(start.slice(11, 16));
+      formattedEventData.date = formatDate(start, locale);
+      formattedEventData.time = formatTime(start.slice(11, 16), locale);
     } else {
       // Legacy v1 events keep their historical "floating time" rendering.
       const datetime = new Date(start);
-      formattedEventData.date = formatDate(datetime.toISOString());
-      formattedEventData.time = formatTime(datetime.toTimeString().split(' ')[0]);
+      formattedEventData.date = formatDate(datetime.toISOString(), locale);
+      formattedEventData.time = formatTime(datetime.toTimeString().split(' ')[0], locale);
     }
   }
   return formattedEventData;
@@ -287,7 +298,7 @@ export async function editEvent(encodedEvent) {
     eventForm.setCanCancel?.(Boolean(baseEvent.updates && ownsChannel(baseEvent.updates)));
     eventForm.setCancelledNotice?.(baseEvent.status === 'cancelled');
     toggleContainers(viewEventContainer, createEventContainer, 'create');
-    document.querySelector('#create-event h1').textContent = 'Edit Event';
+    document.querySelector('#create-event h1').textContent = t('app.editTitle');
   } catch (err) {
     console.error('Failed to decode event for editing:', err);
     eventView.showError();
@@ -314,7 +325,7 @@ export function handleCancelEvent() {
     window.location.href = shareUrl;
   } catch (error) {
     console.error('Cancel event error:', error);
-    eventForm.showError?.('Failed to cancel the event. Please try again.');
+    eventForm.showError?.(t('form.cancelError'));
   }
 }
 
@@ -329,6 +340,12 @@ function setupStateSubscriptions() {
 }
 
 export function initApp() {
+  // Localize the static document chrome (components localize their own
+  // shadow templates as they load).
+  document.documentElement.lang = getLanguage();
+  document.title = t('app.pageTitle');
+  translateRoot(document);
+
   // Query DOM elements
   createEventContainer = document.getElementById('create-event');
   viewEventContainer = document.getElementById('view-event');

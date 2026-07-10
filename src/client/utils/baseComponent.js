@@ -3,6 +3,7 @@
  * Includes utilities for DOM manipulation, event handling, and lifecycle management
  */
 import { loadTemplate } from '../services/template/templateService.js';
+import { translateRoot } from '../i18n.js';
 
 export class BaseComponent extends HTMLElement {
   // Store cleanup functions
@@ -67,6 +68,9 @@ export class BaseComponent extends HTMLElement {
     try {
       const template = await loadTemplate(path);
       this.shadowRoot.innerHTML = template;
+      // Templates are authored in English; swap in the active language's
+      // strings before the component wires up its DOM.
+      translateRoot(this.shadowRoot);
       return true;
     } catch (error) {
       console.error(`Failed to load template: ${path}`, error);
