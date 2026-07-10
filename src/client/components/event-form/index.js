@@ -12,6 +12,7 @@ import {
 export class EventForm extends BaseComponent {
   #isEditMode = false;
   #eventData = null;
+  #privateLink = false;
 
   constructor() {
     super();
@@ -74,6 +75,10 @@ export class EventForm extends BaseComponent {
     // Set up input validation
     const inputs = this.$$('input, textarea');
     inputs.forEach(input => {
+      // The private-link checkbox has no error element (its describedby is a
+      // hint), so keep it out of the validation wiring
+      if (input.type === 'checkbox') return;
+
       this.listen(input, 'input', () => {
         this.validateInput(input);
         this.updateValidationSummary();
@@ -96,8 +101,10 @@ export class EventForm extends BaseComponent {
     if (cancelButton) {
       const path = window.location.pathname;
       if (path.includes('/edit')) {
-        // If we're editing, set the href to go back to the event view
-        const eventUrl = path.replace('/edit', '');
+        // If we're editing, set the href to go back to the event view;
+        // keep query (canEdit) and fragment (the whole event, for private links)
+        const eventUrl =
+          path.replace('/edit', '') + window.location.search + (window.location.hash || '');
         cancelButton.setAttribute('href', eventUrl);
       }
     }
@@ -181,6 +188,9 @@ export class EventForm extends BaseComponent {
 
     if (locationInput) locationInput.value = data.location || '';
     if (descriptionInput) descriptionInput.value = data.description || '';
+
+    const privateCheckbox = this.$('#private');
+    if (privateCheckbox) privateCheckbox.checked = this.#privateLink;
   }
 
   clearValidation() {
@@ -204,6 +214,14 @@ export class EventForm extends BaseComponent {
     this.#isEditMode = isEdit;
     if (this.shadowRoot.innerHTML) {
       this.updateFormMode();
+    }
+  }
+
+  setPrivateLink(value) {
+    this.#privateLink = Boolean(value);
+    if (this.shadowRoot.innerHTML) {
+      const privateCheckbox = this.$('#private');
+      if (privateCheckbox) privateCheckbox.checked = this.#privateLink;
     }
   }
 

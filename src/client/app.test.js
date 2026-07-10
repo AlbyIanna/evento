@@ -240,4 +240,69 @@ describe('App.js', () => {
     // Check that window.location.href was updated correctly
     expect(window.location.href).toBe('http://localhost/event/encoded-event-data?canEdit');
   });
+
+  it('should put the payload in the fragment when the private option is checked', async () => {
+    setupLocationMock({
+      pathname: '/',
+      href: 'http://localhost/',
+      origin: 'http://localhost',
+      search: ''
+    });
+
+    cleanupFn = initApp();
+
+    const formData = new Map();
+    formData.set('title', 'Test Event');
+    formData.set('datetime', '2024-01-01T12:00');
+    formData.set('location', 'Test Location');
+    formData.set('description', 'Test Description');
+    formData.set('private', 'on');
+
+    const submitEvent = new CustomEvent('submit', {
+      detail: { formData, isEdit: false },
+      bubbles: true,
+      cancelable: true
+    });
+
+    document.querySelector('event-form').dispatchEvent(submitEvent);
+
+    expect(window.location.href).toBe('http://localhost/event?canEdit#encoded-event-data');
+  });
+
+  it('should load event data from the fragment when URL is /event#payload', async () => {
+    setupLocationMock({
+      pathname: '/event',
+      href: 'http://localhost/event#fragment-event',
+      origin: 'http://localhost',
+      search: '',
+      hash: '#fragment-event'
+    });
+
+    cleanupFn = initApp();
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+
+    const eventView = document.querySelector('event-view');
+    expect(eventView.setEventData).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Decoded Event' })
+    );
+  });
+
+  it('should enter edit mode from the fragment when URL is /event/edit#payload', async () => {
+    setupLocationMock({
+      pathname: '/event/edit',
+      href: 'http://localhost/event/edit#fragment-event',
+      origin: 'http://localhost',
+      search: '?canEdit',
+      hash: '#fragment-event'
+    });
+
+    cleanupFn = initApp();
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+
+    const eventForm = document.querySelector('event-form');
+    expect(eventForm.setEditMode).toHaveBeenCalledWith(true);
+    expect(eventForm.setEventData).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Decoded Event' })
+    );
+  });
 });

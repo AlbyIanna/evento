@@ -7,6 +7,9 @@ A modern event-sharing application built with Fastify and Vite, designed to make
 - **Simple Event Creation**: Create and customize events with an intuitive form interface
 - **Modern UI**: Clean, responsive interface built with Web Components
 - **No Login, No Data**: The application is designed to be private and secure, with no login required - all event data is encoded in the URL
+- **Add to Calendar**: One-tap ICS download (timezone-correct) and Google Calendar link
+- **Link previews**: Shared links show a title/date/location card in chats (path-carried events)
+- **Private links**: Optional fragment-carried links that never reach any server - no logs, no preview card
 - **Accessibility-first design**
 
 ## Documentation
@@ -63,10 +66,14 @@ npm run dev
 
 ```
 evento/
-├── docs/           # Documentation
+├── docs/           # Documentation (architecture, event format spec)
 ├── src/            # Source code
 │   ├── client/     # Frontend application
+│   ├── shared/     # Wire-format modules (encode/decode, ICS, preview card)
 │   └── server.js   # Backend server
+├── netlify/        # Serverless projections
+│   ├── functions/  # /ics/<payload> → text/calendar, health
+│   └── edge-functions/ # Open Graph preview cards for link-preview bots
 ├── dist/           # Production build
 └── viteCustomPlugins/ # Build customizations
 ```

@@ -25,7 +25,12 @@ export function handleFormSubmit(e) {
 
     // Encode event data
     const encodedEvent = encodeEventData(eventData);
-    const shareUrl = `${window.location.origin}/event/${encodedEvent}?canEdit`;
+    // Private links carry the payload in the fragment, which browsers never
+    // send to any server — so no preview card, no server-side copy
+    const isPrivate = formData.get('private') === 'on';
+    const shareUrl = isPrivate
+      ? `${window.location.origin}/event?canEdit#${encodedEvent}`
+      : `${window.location.origin}/event/${encodedEvent}?canEdit`;
 
     // Navigate to the event view page with edit permission
     window.location.href = shareUrl;
@@ -92,32 +97,14 @@ export function editEvent(encodedEvent) {
     // Configure the form for edit mode
     eventForm.setEditMode(true);
     eventForm.setEventData(eventData);
+    // Private iff the payload is carried in the fragment (no path payload):
+    // a stray '#x' on a public /event/<payload> URL must not flip privacy
+    eventForm.setPrivateLink?.(window.location.pathname === '/event/edit');
     toggleContainers(viewEventContainer, createEventContainer, 'create');
     document.querySelector('#create-event h1').textContent = 'Edit Event';
   } catch (err) {
     console.error('Failed to decode event for editing:', err);
     eventView.showError();
-  } finally {
-    appState.setState({ isLoading: false });
-  }
-}
-
-export function handleEventUpdated(e) {
-  if (appState.getState('isLoading')) return;
-
-  try {
-    appState.setState({ isLoading: true });
-    const { eventData } = e.detail;
-    const encodedEvent = encodeEventData({
-      ...eventData,
-      start: eventData.start || eventData.datetime,
-      tz: eventData.tz || Intl.DateTimeFormat().resolvedOptions().timeZone
-    });
-    const shareUrl = `${window.location.origin}/event/${encodedEvent}?canEdit`;
-    window.location.href = shareUrl;
-  } catch (error) {
-    console.error('Event update error:', error);
-    eventView.showError('Failed to update event link. Please try again.');
   } finally {
     appState.setState({ isLoading: false });
   }
@@ -146,9 +133,20 @@ export function initApp() {
   // Handle initial routing
   const handleInitialRouting = () => {
     const path = window.location.pathname;
-    if (path.startsWith('/event/')) {
-      const encodedEvent = path.split('/event/')[1].replace('/edit', '');
-      if (path.endsWith('/edit')) {
+    const hash = (window.location.hash || '').slice(1);
+    if (path === '/event' || path.startsWith('/event/')) {
+      const isEdit = path.endsWith('/edit');
+      let encodedEvent = path.startsWith('/event/') ? path.slice('/event/'.length) : '';
+      if (encodedEvent === 'edit') {
+        // '/event/edit' has no path payload — the event is in the fragment
+        encodedEvent = '';
+      } else if (encodedEvent.endsWith('/edit')) {
+        encodedEvent = encodedEvent.slice(0, -'/edit'.length);
+      }
+      if (!encodedEvent && hash) {
+        encodedEvent = hash;
+      }
+      if (isEdit) {
         editEvent(encodedEvent);
       } else {
         displayEvent(encodedEvent);
@@ -163,17 +161,19 @@ export function initApp() {
     handleInitialRouting();
   }
 
+  // Private links differ only by fragment, so following one from an open
+  // event is a same-document navigation: re-route on hash changes
+  window.addEventListener('hashchange', handleInitialRouting);
+
   // Set up event listeners with proper cleanup
   const formSubmitListener = e => handleFormSubmit(e);
-  const eventUpdatedListener = e => handleEventUpdated(e);
 
   eventForm.addEventListener('submit', formSubmitListener);
-  eventView.addEventListener('event-updated', eventUpdatedListener);
 
   // Return a cleanup function that can be called when needed
   return () => {
     document.removeEventListener('DOMContentLoaded', handleInitialRouting);
+    window.removeEventListener('hashchange', handleInitialRouting);
     eventForm.removeEventListener('submit', formSubmitListener);
-    eventView.removeEventListener('event-updated', eventUpdatedListener);
   };
 }

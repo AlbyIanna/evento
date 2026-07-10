@@ -1,11 +1,13 @@
 import { BaseComponent } from '../../utils/baseComponent.js';
 import { appState } from '../../utils/stateManager.js';
+import { buildIcs, buildGoogleCalendarUrl } from '../../../shared/ics.js';
 
 export class EventView extends BaseComponent {
   #eventData = null;
   #encodedEvent = null;
   #hasEditPermission = false;
   #currentUrl = '';
+  #icsBlobUrl = null;
 
   constructor() {
     super();
@@ -48,8 +50,9 @@ export class EventView extends BaseComponent {
       // Show the edit button
       editButton.classList.remove('hidden');
 
-      // Create the edit URL by adding /edit to the current path
-      const editUrl = `${window.location.pathname}/edit`;
+      // Create the edit URL by adding /edit to the current path; keep the
+      // fragment, which carries the whole event for private links
+      const editUrl = `${window.location.pathname}/edit${window.location.hash || ''}`;
       editButton.setAttribute('href', editUrl);
     }
 
@@ -73,7 +76,9 @@ export class EventView extends BaseComponent {
         .share({
           title: this.#eventData?.title || 'Event Details',
           text: `Join me at ${this.#eventData?.title} on ${this.#eventData?.date} at ${this.#eventData?.time}`,
-          url: this.#currentUrl.split('?')[0] // Remove any query parameters
+          // Drop the query string (canEdit) but keep the fragment, which
+          // carries the whole event for private links
+          url: window.location.origin + window.location.pathname + (window.location.hash || '')
         })
         .catch(error => {
           console.error('Error sharing:', error);
@@ -86,8 +91,10 @@ export class EventView extends BaseComponent {
   }
 
   #handleCopy() {
-    // Create a clean URL without the edit parameter
-    const cleanUrl = window.location.origin + window.location.pathname;
+    // Create a clean URL without the edit parameter, keeping the fragment
+    // (it carries the whole event for private links)
+    const cleanUrl =
+      window.location.origin + window.location.pathname + (window.location.hash || '');
 
     // Copy to clipboard
     navigator.clipboard
@@ -158,6 +165,51 @@ export class EventView extends BaseComponent {
       } else {
         descriptionContainer.classList.add('hidden');
       }
+    }
+
+    this.#updateCalendarLinks(eventData);
+  }
+
+  #updateCalendarLinks(eventData) {
+    const calendarButton = this.$('#calendar-button');
+    const gcalButton = this.$('#gcal-button');
+    if (!calendarButton || !gcalButton) return;
+
+    calendarButton.classList.add('hidden');
+    gcalButton.classList.add('hidden');
+
+    const start = eventData && (eventData.start || eventData.datetime);
+    if (!start) return;
+
+    // Fragment-carried (private) events must never send the payload to any
+    // server: no /ics fallback, and no description in third-party URLs
+    const isPrivate = !this.#encodedEvent;
+
+    try {
+      if (typeof URL.createObjectURL === 'function') {
+        const ics = buildIcs(eventData);
+        if (this.#icsBlobUrl && typeof URL.revokeObjectURL === 'function') {
+          URL.revokeObjectURL(this.#icsBlobUrl);
+        }
+        this.#icsBlobUrl = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+        calendarButton.setAttribute('href', this.#icsBlobUrl);
+        calendarButton.classList.remove('hidden');
+      } else if (!isPrivate) {
+        // No Blob URLs (e.g. limited webviews): fall back to the stateless
+        // server projection for path-carried events
+        calendarButton.setAttribute('href', `/ics/${this.#encodedEvent}`);
+        calendarButton.classList.remove('hidden');
+      }
+    } catch (err) {
+      console.error('Failed to build ICS link:', err);
+    }
+
+    try {
+      const gcalData = isPrivate ? { ...eventData, description: '' } : eventData;
+      gcalButton.setAttribute('href', buildGoogleCalendarUrl(gcalData));
+      gcalButton.classList.remove('hidden');
+    } catch (err) {
+      console.error('Failed to build Google Calendar link:', err);
     }
   }
 

@@ -9,15 +9,27 @@ inside a URL, and any Evento instance can decode URLs produced by any other
 instance. If you self-host Evento (or write your own reader), this is the
 contract.
 
-## URL shape
+## URL carriers
 
-```
-https://<instance>/event/<payload>
-```
+An instance serves the same payload from two carriers; the payload format is
+identical in both, and decoders MUST accept both.
 
-`<payload>` is the encoded event as specified below. The path carrier is the
-current default; carriers that keep the payload out of server reach (URL
-fragment) are planned and do not change the payload format itself.
+| Carrier               | Shape                                | Semantics                                                                                                                                                                                        |
+| --------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Path ("with preview") | `https://<instance>/event/<payload>` | The payload reaches the serving instance, which derives stateless projections from it (see below). Edit URLs: `/event/<payload>/edit`.                                                           |
+| Fragment ("private")  | `https://<instance>/event#<payload>` | The payload never leaves the browser — URL fragments are not sent in HTTP requests — so there are no server logs, no preview card and no server projections. Edit URLs: `/event/edit#<payload>`. |
+
+### Server projections (path carrier only)
+
+Instances MAY serve, computed statelessly from the payload on every request:
+
+- `GET /ics/<payload>` → `text/calendar` (RFC 5545 export; enables `webcal://`)
+- An Open Graph preview page on `/event/<payload>`, served only to
+  link-preview bots (envelope only: title, date/time, location — never the
+  description)
+
+Projections are suppressed for payloads in the instance's abuse denylist
+(configuration state, not user data).
 
 ## Encoding
 
@@ -106,5 +118,5 @@ Encoded-parameter shape (cheap pre-validation without decoding):
   changes to holders of an old URL is the job of the `updates` channel, not
   of the format.
 - Nothing in the payload is secret: anyone holding the URL can read every
-  field. Sensitive events should use a carrier that keeps the payload away
-  from servers (fragment), not rely on the format.
+  field. Sensitive events should use the fragment carrier, which keeps the
+  payload away from servers — not rely on the format.

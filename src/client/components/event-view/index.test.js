@@ -420,6 +420,64 @@ describe('EventView Component', () => {
     expect(newActiveElement).toBe(copyButton);
   });
 
+  it('should keep the fragment in copy and edit URLs for private events', async () => {
+    setupLocationMock({
+      pathname: '/event',
+      href: 'http://localhost:3000/event?canEdit#privatePayload',
+      origin: 'http://localhost:3000',
+      search: '?canEdit',
+      hash: '#privatePayload'
+    });
+    const clipboardMock = setupClipboardMock(true);
+
+    document.body.removeChild(eventView);
+    eventView = new EventView();
+    document.body.appendChild(eventView);
+    await eventView.connectedCallback();
+
+    const editButton = eventView.$('#edit-button');
+    expect(editButton.getAttribute('href')).toBe('/event/edit#privatePayload');
+
+    const copyButton = eventView.$('#copy-button');
+    await user.click(copyButton);
+    expect(clipboardMock.writeText).toHaveBeenCalledWith(
+      'http://localhost:3000/event#privatePayload'
+    );
+  });
+
+  it('should show the Google Calendar link when event data has a start', async () => {
+    eventView.setEventData({
+      title: 'Calendar Event',
+      start: '2026-08-01T19:00',
+      tz: 'Europe/Rome',
+      date: '08/01/2026',
+      time: '7:00 PM',
+      location: 'Test Location'
+    });
+
+    const gcalButton = eventView.$('#gcal-button');
+    expect(gcalButton.classList.contains('hidden')).toBe(false);
+    expect(gcalButton.getAttribute('href')).toContain('calendar.google.com');
+
+    // jsdom has no URL.createObjectURL: path-carried events fall back to
+    // the stateless /ics/ server projection instead of a blob URL
+    const calendarButton = eventView.$('#calendar-button');
+    expect(calendarButton.classList.contains('hidden')).toBe(false);
+    expect(calendarButton.getAttribute('href')).toBe('/ics/testEvent');
+  });
+
+  it('should keep calendar links hidden when event data has no start', async () => {
+    eventView.setEventData({
+      title: 'No Start',
+      date: '04/15/2024',
+      time: '14:00',
+      location: 'Test Location'
+    });
+
+    expect(eventView.$('#calendar-button').classList.contains('hidden')).toBe(true);
+    expect(eventView.$('#gcal-button').classList.contains('hidden')).toBe(true);
+  });
+
   it('should navigate to edit URL when edit button is clicked', async () => {
     const editButton = eventView.$('#edit-button');
 

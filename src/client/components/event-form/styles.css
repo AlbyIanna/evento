@@ -85,6 +85,26 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: normal;
+  overflow: visible;
+  cursor: pointer;
+}
+
+.checkbox-label input {
+  width: auto;
+  margin: 0;
+}
+
+.field-hint {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  color: #6c757d;
+}
+
 /* Validation styles */
 .field-error {
   color: #dc3545;

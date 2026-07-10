@@ -48,6 +48,16 @@
     <label for="description">Description</label>
     <textarea id="description" name="description" rows="4"></textarea>
   </div>
+  <div class="form-group">
+    <label class="checkbox-label"
+      ><input type="checkbox" id="private" name="private" aria-describedby="private-hint" /> Private
+      link (no preview card)</label
+    >
+    <div id="private-hint" class="field-hint">
+      The event lives only in the link itself — it never reaches our server, so chats will not show
+      a preview card. Opening it in an external calendar shares it with that provider.
+    </div>
+  </div>
   <div class="button-container">
     <!-- Create mode button -->
     <button type="submit" id="create-button">Create Event Link</button>
