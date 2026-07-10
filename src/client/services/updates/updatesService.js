@@ -121,6 +121,47 @@ export function hasSecretKey(pk) {
 }
 
 /**
+ * Exports the channel secret for the organizer capability URL. Returns the
+ * 64-hex secret only when this browser owns the exact channel (pk AND d),
+ * else null. The caller must put it in a URL FRAGMENT only — fragments
+ * never reach any server.
+ */
+export function exportChannelSecret(updates) {
+  if (!ownsChannel(updates)) {
+    return null;
+  }
+  return readSecretRecord(updates.pk).sk;
+}
+
+/**
+ * Imports a channel secret carried by an organizer capability URL. The key
+ * is accepted only when its derived pubkey matches the event's own updates
+ * pointer, and is then stored bound to that channel's d — exactly the
+ * record generateUpdateChannel would have written. Returns true on import,
+ * false for a malformed or mismatched key. Never throws.
+ */
+export function importChannelSecret(secretHex, updates) {
+  try {
+    if (!updates || typeof updates.pk !== 'string' || typeof updates.d !== 'string') {
+      return false;
+    }
+    if (typeof secretHex !== 'string' || !SECRET_HEX_PATTERN.test(secretHex)) {
+      return false;
+    }
+    if (getPublicKey(hexToBytes(secretHex)) !== updates.pk) {
+      return false;
+    }
+    localStorage.setItem(
+      SECRET_KEY_PREFIX + updates.pk,
+      JSON.stringify({ sk: secretHex, d: updates.d })
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Authorizes signing for a channel. True ONLY when this browser minted the
  * exact channel — both the pubkey AND the addressable id `d` must match the
  * stored record. Possession of a secret for the pubkey is not enough: this

@@ -5,6 +5,8 @@ import { appState } from './utils/stateManager.js';
 import {
   generateUpdateChannel,
   ownsChannel,
+  exportChannelSecret,
+  importChannelSecret,
   markPendingPublish,
   peekPendingPublish,
   clearPendingPublish,
@@ -13,7 +15,7 @@ import {
 } from './services/updates/updatesService.js';
 
 // DOM elements (will be set in initApp)
-let eventForm, eventView, createEventContainer, viewEventContainer;
+let eventForm, eventView, linkReady, createEventContainer, viewEventContainer, linkReadyContainer;
 
 // The event currently being edited — kept so a re-encode (update or cancel)
 // preserves its updates pointer instead of minting a new channel
@@ -64,17 +66,93 @@ export function handleFormSubmit(e) {
     // Private links carry the payload in the fragment, which browsers never
     // send to any server — so no preview card, no server-side copy
     const isPrivate = formData.get('private') === 'on';
-    const shareUrl = isPrivate
-      ? `${window.location.origin}/event?canEdit#${encodedEvent}`
-      : `${window.location.origin}/event/${encodedEvent}?canEdit`;
 
-    // Navigate to the event view page with edit permission
-    window.location.href = shareUrl;
+    if (e.detail.isEdit) {
+      // Navigate to the event view page with edit permission
+      window.location.href = isPrivate
+        ? `${window.location.origin}/event?canEdit#${encodedEvent}`
+        : `${window.location.origin}/event/${encodedEvent}?canEdit`;
+    } else {
+      // A brand-new event gets the "your link is ready" screen first: the
+      // link is the only way back to the event, so it must be impossible
+      // to miss before anything else happens.
+      showLinkReady(eventData, encodedEvent, isPrivate);
+    }
   } catch (error) {
     console.error('Form submission error:', error);
     eventForm.showError('Failed to create event link. Please try again.');
   } finally {
     appState.setState({ isLoading: false });
+  }
+}
+
+function showLinkReady(eventData, encodedEvent, isPrivate) {
+  const origin = window.location.origin;
+  const shareUrl = isPrivate
+    ? `${origin}/event#${encodedEvent}`
+    : `${origin}/event/${encodedEvent}`;
+  const viewUrl = isPrivate
+    ? `${origin}/event?canEdit#${encodedEvent}`
+    : `${origin}/event/${encodedEvent}?canEdit`;
+
+  // Organizer capability URL: the channel secret rides in the FRAGMENT
+  // (never sent to any server, same rule as private payloads), so opening
+  // it on another device imports the key and that device can manage the
+  // event too.
+  let organizerUrl = null;
+  if (eventData.updates) {
+    const secret = exportChannelSecret(eventData.updates);
+    if (secret) {
+      organizerUrl = isPrivate
+        ? `${origin}/event?canEdit#${encodedEvent}&org=${secret}`
+        : `${origin}/event/${encodedEvent}?canEdit#org=${secret}`;
+    }
+  }
+
+  linkReady.setLinks({ title: eventData.title, shareUrl, viewUrl, organizerUrl });
+  toggleContainers(createEventContainer, linkReadyContainer, 'link-ready');
+
+  // Keep the address bar holding the event while this screen is up: an
+  // accidental refresh must not destroy the only copy of the link before
+  // the user saved it. replaceState navigates nothing, so the screen stays.
+  try {
+    window.history.replaceState(null, '', viewUrl);
+  } catch {
+    // history unavailable: the on-screen link is still there to copy
+  }
+}
+
+/**
+ * Fragment grammar. The fragment can carry two '&'-separated things: the
+ * event payload (private links) and the organizer key ('org=<64-hex>').
+ * Payloads use base64url plus the legacy '+' — never '&' or '=' — so the
+ * two segment kinds cannot be confused.
+ */
+export function parseFragment(hash) {
+  let payload = '';
+  let orgKey = null;
+  for (const part of hash.split('&')) {
+    if (part.startsWith('org=')) {
+      orgKey = part.slice('org='.length);
+    } else if (part && !payload) {
+      payload = part;
+    }
+  }
+  return { payload, orgKey };
+}
+
+// Removes the organizer secret from the address bar, keeping the payload
+// when it is fragment-carried. replaceState never fires hashchange, so no
+// re-routing happens.
+function stripOrganizerKeyFromUrl(fragmentPayload) {
+  const cleanUrl =
+    window.location.pathname +
+    window.location.search +
+    (fragmentPayload ? `#${fragmentPayload}` : '');
+  try {
+    window.history.replaceState(null, '', cleanUrl);
+  } catch {
+    // history unavailable: the fragment still never reaches any server
   }
 }
 
@@ -132,7 +210,7 @@ function checkForUpdates(eventData, encodedEvent) {
   })();
 }
 
-export function displayEvent(encodedEvent) {
+export function displayEvent(encodedEvent, orgKey = null) {
   if (appState.getState('isLoading')) return;
 
   try {
@@ -149,6 +227,15 @@ export function displayEvent(encodedEvent) {
     toggleContainers(createEventContainer, viewEventContainer, 'view');
 
     if (eventData.updates) {
+      if (orgKey !== null && importChannelSecret(orgKey, eventData.updates)) {
+        // Organizer capability URL: the key matches this event's channel
+        // and is now in this browser's localStorage.
+        eventView.showOrganizerImported?.();
+      } else if (!ownsChannel(eventData.updates)) {
+        // We cannot know whether this viewer is the organizer, so the
+        // honest move is a discreet pointer to the organizer link.
+        eventView.showOrganizerHint?.();
+      }
       checkForUpdates(eventData, encodedEvent);
     }
   } catch (err) {
@@ -241,8 +328,10 @@ export function initApp() {
   // Query DOM elements
   createEventContainer = document.getElementById('create-event');
   viewEventContainer = document.getElementById('view-event');
+  linkReadyContainer = document.getElementById('link-ready');
   eventForm = document.querySelector('event-form');
   eventView = document.querySelector('event-view');
+  linkReady = document.querySelector('link-ready');
 
   // Set up state subscriptions
   setupStateSubscriptions();
@@ -252,6 +341,7 @@ export function initApp() {
     const path = window.location.pathname;
     const hash = (window.location.hash || '').slice(1);
     if (path === '/event' || path.startsWith('/event/')) {
+      const { payload: fragmentPayload, orgKey } = parseFragment(hash);
       const isEdit = path.endsWith('/edit');
       let encodedEvent = path.startsWith('/event/') ? path.slice('/event/'.length) : '';
       if (encodedEvent === 'edit') {
@@ -260,13 +350,20 @@ export function initApp() {
       } else if (encodedEvent.endsWith('/edit')) {
         encodedEvent = encodedEvent.slice(0, -'/edit'.length);
       }
-      if (!encodedEvent && hash) {
-        encodedEvent = hash;
+      let payloadInFragment = false;
+      if (!encodedEvent && fragmentPayload) {
+        encodedEvent = fragmentPayload;
+        payloadInFragment = true;
+      }
+      if (orgKey !== null) {
+        // The secret must not linger in the address bar (or leak into
+        // copy/share/edit URLs built from it): strip it before rendering.
+        stripOrganizerKeyFromUrl(payloadInFragment ? encodedEvent : '');
       }
       if (isEdit) {
         editEvent(encodedEvent);
       } else {
-        displayEvent(encodedEvent);
+        displayEvent(encodedEvent, orgKey);
       }
     }
   };

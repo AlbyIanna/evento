@@ -678,6 +678,42 @@ describe('EventView Component', () => {
     );
   });
 
+  it('shows the confirmation when the organizer key is imported', async () => {
+    const notice = eventView.$('#organizer-notice');
+    expect(notice.classList.contains('hidden')).toBe(true);
+
+    eventView.showOrganizerImported();
+
+    expect(notice.classList.contains('hidden')).toBe(false);
+    expect(notice.textContent).toContain('this device can now edit or cancel this event');
+    expect(notice.getAttribute('role')).toBe('status');
+  });
+
+  it('shows the discreet organizer hint when asked', async () => {
+    const hint = eventView.$('#organizer-hint');
+    expect(hint.classList.contains('hidden')).toBe(true);
+
+    eventView.showOrganizerHint();
+
+    expect(hint.classList.contains('hidden')).toBe(false);
+    expect(hint.textContent).toContain('organizer link');
+  });
+
+  it('applies organizer notices raised before the template finished loading', async () => {
+    // displayEvent runs synchronously on page load, while the template is
+    // still fetching: the flags must survive until render applies them.
+    document.body.removeChild(eventView);
+    eventView = new EventView();
+
+    eventView.showOrganizerImported();
+    eventView.showOrganizerHint();
+    document.body.appendChild(eventView);
+    await eventView.connectedCallback();
+
+    expect(eventView.$('#organizer-notice').classList.contains('hidden')).toBe(false);
+    expect(eventView.$('#organizer-hint').classList.contains('hidden')).toBe(false);
+  });
+
   it('resets to the zero-coverage text when showPublishWarning follows showPublishPartial', async () => {
     // Same session, two publishes: a partial one mutated the warning text,
     // then a fully failed one must not show the stale "Published to N of M".

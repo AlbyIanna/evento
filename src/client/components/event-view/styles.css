@@ -38,6 +38,25 @@ h2 {
   text-decoration: line-through;
 }
 
+.organizer-notice {
+  background-color: rgba(40, 167, 69, 0.1);
+  color: #155724;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.organizer-hint {
+  color: #6c757d;
+  font-size: 0.8rem;
+  text-align: center;
+  margin: 1rem 0 0;
+}
+
 .publish-warning {
   background-color: rgba(255, 193, 7, 0.15);
   color: #856404;

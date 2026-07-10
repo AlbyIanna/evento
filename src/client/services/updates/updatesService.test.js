@@ -8,6 +8,8 @@ import {
   generateUpdateChannel,
   hasSecretKey,
   ownsChannel,
+  exportChannelSecret,
+  importChannelSecret,
   markPendingPublish,
   consumePendingPublish,
   peekPendingPublish,
@@ -175,6 +177,81 @@ describe('generateUpdateChannel / hasSecretKey / ownsChannel', () => {
     expect(ownsChannel({ pk: 'a'.repeat(64), d })).toBe(false);
     expect(ownsChannel(null)).toBe(false);
     expect(ownsChannel({ pk, d })).toBe(true);
+  });
+});
+
+describe('organizer key portability (exportChannelSecret / importChannelSecret)', () => {
+  it('round-trips: export on the creating device, import on a fresh one', () => {
+    const updates = generateUpdateChannel();
+    const secret = exportChannelSecret(updates);
+    expect(secret).toMatch(/^[0-9a-f]{64}$/);
+    expect(getPublicKey(hexToBytes(secret))).toBe(updates.pk);
+
+    // "New device": no stored secrets at all.
+    localStorage.clear();
+    expect(ownsChannel(updates)).toBe(false);
+
+    expect(importChannelSecret(secret, updates)).toBe(true);
+    expect(hasSecretKey(updates.pk)).toBe(true);
+    expect(ownsChannel(updates)).toBe(true);
+    // The import binds the secret to the event's own channel id, so a
+    // crafted payload with a different d still cannot be signed for.
+    expect(ownsChannel({ pk: updates.pk, d: 'ffffffffffff' })).toBe(false);
+  });
+
+  it('never exports a secret for a channel this browser does not own', () => {
+    const channel = makeChannel();
+    expect(exportChannelSecret({ pk: channel.pk, d: channel.d })).toBe(null);
+
+    // Right pk, wrong d: same authorization rule as ownsChannel.
+    const updates = generateUpdateChannel();
+    expect(exportChannelSecret({ pk: updates.pk, d: 'ffffffffffff' })).toBe(null);
+    expect(exportChannelSecret(null)).toBe(null);
+  });
+
+  it('rejects a well-formed key that does not match the channel pubkey', () => {
+    const updates = generateUpdateChannel();
+    const other = generateUpdateChannel();
+    const wrongSecret = exportChannelSecret(other);
+    localStorage.clear();
+
+    expect(importChannelSecret(wrongSecret, updates)).toBe(false);
+    expect(ownsChannel(updates)).toBe(false);
+    expect(hasSecretKey(updates.pk)).toBe(false);
+  });
+
+  it('rejects malformed keys and malformed channel pointers', () => {
+    const updates = generateUpdateChannel();
+    localStorage.clear();
+
+    for (const bad of ['', 'not-hex', 'ff', 'F'.repeat(64), 'f'.repeat(63), null, 42]) {
+      expect(importChannelSecret(bad, updates)).toBe(false);
+    }
+    const secret = 'f'.repeat(64);
+    expect(importChannelSecret(secret, null)).toBe(false);
+    expect(importChannelSecret(secret, { pk: 42, d: 'abc' })).toBe(false);
+    expect(importChannelSecret(secret, { pk: 'a'.repeat(64) })).toBe(false);
+    expect(ownsChannel(updates)).toBe(false);
+  });
+
+  it('an imported key authorizes publishing exactly like a minted one', async () => {
+    const updates = generateUpdateChannel();
+    const secret = exportChannelSecret(updates);
+    const event = makeEvent({ pk: updates.pk, d: updates.d });
+    const encoded = encodeEventData(event);
+
+    // "New device" imports the key, then publishes an update.
+    localStorage.clear();
+    expect(importChannelSecret(secret, updates)).toBe(true);
+
+    const promise = publishCurrentVersion(event, encoded);
+    const sockets = FakeWebSocket.instances;
+    sockets.forEach(socket => socket.open());
+    const [, signed] = sockets[0].sent[0];
+    expect(signed.pubkey).toBe(updates.pk);
+    expect(verifyEvent(signed)).toBe(true);
+    sockets.forEach(socket => socket.message(['OK', signed.id, true, '']));
+    await expect(promise).resolves.toEqual({ ok: true, ackCount: 4, relayCount: 4 });
   });
 });
 

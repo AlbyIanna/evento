@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { setupLocationMock } from './test/test-utils';
-import { initApp } from './app.js';
+import { initApp, parseFragment } from './app.js';
 import userEvent from '@testing-library/user-event';
 import { encodeEventData, decodeEventData } from './utils/eventUtils.js';
 import { appState } from './utils/stateManager.js';
 import {
   generateUpdateChannel,
+  ownsChannel,
+  exportChannelSecret,
+  importChannelSecret,
   markPendingPublish,
   peekPendingPublish,
   clearPendingPublish,
@@ -33,6 +36,8 @@ vi.mock('./utils/eventUtils.js', () => ({
 vi.mock('./services/updates/updatesService.js', () => ({
   generateUpdateChannel: vi.fn(() => ({ pk: 'a'.repeat(64), d: 'channel-d' })),
   ownsChannel: vi.fn(() => true),
+  exportChannelSecret: vi.fn(() => 'f'.repeat(64)),
+  importChannelSecret: vi.fn(() => true),
   markPendingPublish: vi.fn(),
   peekPendingPublish: vi.fn(() => false),
   clearPendingPublish: vi.fn(),
@@ -74,6 +79,9 @@ function setupDOM() {
             <h1>Create Event</h1>
             <event-form></event-form>
         </div>
+        <div id="link-ready" class="container hidden">
+            <link-ready></link-ready>
+        </div>
         <div id="view-event" class="container hidden">
             <event-view></event-view>
         </div>
@@ -85,6 +93,8 @@ function setupDOM() {
   const eventView = document.querySelector('event-view');
   eventView.setEventData = vi.fn();
   eventView.showError = vi.fn();
+  const linkReady = document.querySelector('link-ready');
+  linkReady.setLinks = vi.fn();
 }
 
 describe('App.js', () => {
@@ -251,8 +261,20 @@ describe('App.js', () => {
       description: 'Test Description'
     });
 
-    // Check that window.location.href was updated correctly
-    expect(window.location.href).toBe('http://localhost/event/encoded-event-data?canEdit');
+    // A new event does NOT navigate away: it lands on the "your link is
+    // ready" screen, which holds the only way back to the event.
+    expect(window.location.href).toBe('http://localhost/');
+    expect(document.querySelector('link-ready').setLinks).toHaveBeenCalledWith({
+      title: 'Test Event',
+      shareUrl: 'http://localhost/event/encoded-event-data',
+      viewUrl: 'http://localhost/event/encoded-event-data?canEdit',
+      organizerUrl: null
+    });
+    expect(toggleContainersMock).toHaveBeenCalledWith(
+      document.getElementById('create-event'),
+      document.getElementById('link-ready'),
+      'link-ready'
+    );
   });
 
   it('should put the payload in the fragment when the private option is checked', async () => {
@@ -280,7 +302,12 @@ describe('App.js', () => {
 
     document.querySelector('event-form').dispatchEvent(submitEvent);
 
-    expect(window.location.href).toBe('http://localhost/event?canEdit#encoded-event-data');
+    expect(document.querySelector('link-ready').setLinks).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shareUrl: 'http://localhost/event#encoded-event-data',
+        viewUrl: 'http://localhost/event?canEdit#encoded-event-data'
+      })
+    );
   });
 
   it('should load event data from the fragment when URL is /event#payload', async () => {
@@ -380,7 +407,96 @@ describe('App.js', () => {
       expect(generateUpdateChannel).toHaveBeenCalledTimes(1);
       expect(encodeEventData).toHaveBeenCalledWith(expect.objectContaining({ updates }));
       expect(markPendingPublish).toHaveBeenCalledWith('encoded-event-data');
-      expect(window.location.href).toBe('http://localhost/event/encoded-event-data?canEdit');
+      // The post-creation screen carries the organizer capability URL with
+      // the channel secret in the fragment (never sent to any server).
+      expect(exportChannelSecret).toHaveBeenCalledWith(updates);
+      expect(document.querySelector('link-ready').setLinks).toHaveBeenCalledWith(
+        expect.objectContaining({
+          shareUrl: 'http://localhost/event/encoded-event-data',
+          organizerUrl: `http://localhost/event/encoded-event-data?canEdit#org=${'f'.repeat(64)}`
+        })
+      );
+    });
+
+    it('should keep the organizer key in the fragment for private updatable events', async () => {
+      setupLocationMock({
+        pathname: '/',
+        href: 'http://localhost/',
+        origin: 'http://localhost',
+        search: ''
+      });
+      cleanupFn = initApp();
+
+      submitForm({
+        title: 'Test Event',
+        datetime: '2024-01-01T12:00',
+        location: 'Test Location',
+        description: 'Test Description',
+        private: 'on',
+        updatable: 'on'
+      });
+
+      expect(document.querySelector('link-ready').setLinks).toHaveBeenCalledWith(
+        expect.objectContaining({
+          shareUrl: 'http://localhost/event#encoded-event-data',
+          organizerUrl: `http://localhost/event?canEdit#encoded-event-data&org=${'f'.repeat(64)}`
+        })
+      );
+    });
+
+    it('should keep the event link in the address bar behind the post-creation screen', async () => {
+      const replaceState = vi.fn();
+      Object.defineProperty(window, 'history', {
+        value: { replaceState },
+        configurable: true,
+        writable: true
+      });
+      setupLocationMock({
+        pathname: '/',
+        href: 'http://localhost/',
+        origin: 'http://localhost',
+        search: ''
+      });
+      cleanupFn = initApp();
+
+      submitForm({
+        title: 'Test Event',
+        datetime: '2024-01-01T12:00',
+        location: 'Test Location',
+        description: 'Test Description',
+        updatable: 'on'
+      });
+
+      // An accidental refresh on the "link ready" screen must not destroy
+      // the only copy of the link: the address bar already holds the event.
+      expect(replaceState).toHaveBeenCalledWith(
+        null,
+        '',
+        'http://localhost/event/encoded-event-data?canEdit'
+      );
+    });
+
+    it('should not build an organizer link when the channel secret is unavailable', async () => {
+      exportChannelSecret.mockReturnValueOnce(null);
+      setupLocationMock({
+        pathname: '/',
+        href: 'http://localhost/',
+        origin: 'http://localhost',
+        search: ''
+      });
+      cleanupFn = initApp();
+
+      submitForm({
+        title: 'Test Event',
+        datetime: '2024-01-01T12:00',
+        location: 'Test Location',
+        description: 'Test Description',
+        updatable: 'on'
+      });
+
+      expect(document.querySelector('link-ready').setLinks).toHaveBeenCalledWith(
+        expect.objectContaining({ organizerUrl: null })
+      );
     });
 
     it('should preserve the original updates pointer on edit without minting a new channel', async () => {
@@ -598,6 +714,137 @@ describe('App.js', () => {
 
       expect(eventForm.setUpdatableLink).toHaveBeenCalledWith(true);
       expect(eventForm.setCanCancel).toHaveBeenCalledWith(true);
+    });
+  });
+
+  describe('organizer capability URL', () => {
+    const updates = { pk: 'a'.repeat(64), d: 'channel-d' };
+    const secret = 'b'.repeat(64);
+
+    const decodedWithUpdates = {
+      title: 'Decoded Event',
+      start: '2024-01-01T12:00',
+      tz: 'Europe/Rome',
+      location: 'Test Location',
+      description: 'Test Description',
+      status: 'confirmed',
+      updates
+    };
+
+    let replaceState;
+
+    beforeEach(() => {
+      replaceState = vi.fn();
+      Object.defineProperty(window, 'history', {
+        value: { replaceState },
+        configurable: true,
+        writable: true
+      });
+    });
+
+    function openView(pathname, hash) {
+      setupLocationMock({
+        pathname,
+        href: `http://localhost${pathname}${hash || ''}`,
+        origin: 'http://localhost',
+        search: '',
+        hash: hash || ''
+      });
+      cleanupFn = initApp();
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+    }
+
+    it('imports the key, strips the secret from the URL and confirms', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      const eventView = document.querySelector('event-view');
+      eventView.showOrganizerImported = vi.fn();
+
+      openView('/event/test-event', `#org=${secret}`);
+
+      expect(decodeEventData).toHaveBeenCalledWith('test-event');
+      expect(importChannelSecret).toHaveBeenCalledWith(secret, updates);
+      // The secret never lingers in the address bar.
+      expect(replaceState).toHaveBeenCalledWith(null, '', '/event/test-event');
+      expect(eventView.showOrganizerImported).toHaveBeenCalled();
+    });
+
+    it('keeps the fragment payload while stripping the key on a private organizer link', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      const eventView = document.querySelector('event-view');
+      eventView.showOrganizerImported = vi.fn();
+
+      openView('/event', `#fragment-event&org=${secret}`);
+
+      expect(decodeEventData).toHaveBeenCalledWith('fragment-event');
+      expect(importChannelSecret).toHaveBeenCalledWith(secret, updates);
+      expect(replaceState).toHaveBeenCalledWith(null, '', '/event#fragment-event');
+      expect(eventView.showOrganizerImported).toHaveBeenCalled();
+    });
+
+    it('does not confirm an import when the key does not match the channel', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      importChannelSecret.mockReturnValueOnce(false);
+      ownsChannel.mockReturnValueOnce(false);
+      const eventView = document.querySelector('event-view');
+      eventView.showOrganizerImported = vi.fn();
+      eventView.showOrganizerHint = vi.fn();
+
+      openView('/event/test-event', `#org=${secret}`);
+
+      expect(eventView.showOrganizerImported).not.toHaveBeenCalled();
+      // The wrong secret is stripped from the URL all the same.
+      expect(replaceState).toHaveBeenCalledWith(null, '', '/event/test-event');
+      // Without the key, the device gets the discreet organizer hint.
+      expect(eventView.showOrganizerHint).toHaveBeenCalled();
+    });
+
+    it('shows the discreet organizer hint when the device lacks the key', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      ownsChannel.mockReturnValueOnce(false);
+      const eventView = document.querySelector('event-view');
+      eventView.showOrganizerHint = vi.fn();
+
+      openView('/event/test-event');
+
+      expect(eventView.showOrganizerHint).toHaveBeenCalled();
+      expect(replaceState).not.toHaveBeenCalled();
+    });
+
+    it('shows no hint when the device owns the channel', async () => {
+      decodeEventData.mockReturnValueOnce(decodedWithUpdates);
+      const eventView = document.querySelector('event-view');
+      eventView.showOrganizerHint = vi.fn();
+
+      openView('/event/test-event');
+
+      expect(eventView.showOrganizerHint).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('parseFragment', () => {
+    it('reads a plain payload fragment (private link)', () => {
+      expect(parseFragment('someBase64_-Payload')).toEqual({
+        payload: 'someBase64_-Payload',
+        orgKey: null
+      });
+    });
+
+    it('reads a lone organizer key (public organizer link)', () => {
+      expect(parseFragment(`org=${'c'.repeat(64)}`)).toEqual({
+        payload: '',
+        orgKey: 'c'.repeat(64)
+      });
+    });
+
+    it('reads payload and organizer key together (private organizer link)', () => {
+      expect(parseFragment(`payload123&org=${'c'.repeat(64)}`)).toEqual({
+        payload: 'payload123',
+        orgKey: 'c'.repeat(64)
+      });
+    });
+
+    it('returns empty results for an empty fragment', () => {
+      expect(parseFragment('')).toEqual({ payload: '', orgKey: null });
     });
   });
 });

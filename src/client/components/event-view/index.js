@@ -8,6 +8,10 @@ export class EventView extends BaseComponent {
   #hasEditPermission = false;
   #currentUrl = '';
   #icsBlobUrl = null;
+  // Buffered flags: these can be raised before the template has loaded
+  // (displayEvent runs synchronously, the template fetch does not).
+  #organizerImported = false;
+  #organizerHint = false;
 
   constructor() {
     super();
@@ -40,6 +44,12 @@ export class EventView extends BaseComponent {
     if (this.#eventData) {
       this.#updateDom(this.#eventData);
       this.#showBanner(this.#eventData.status === 'cancelled' ? 'cancelled' : 'none');
+    }
+    if (this.#organizerImported) {
+      this.$('#organizer-notice')?.classList.remove('hidden');
+    }
+    if (this.#organizerHint) {
+      this.$('#organizer-hint')?.classList.remove('hidden');
     }
   }
 
@@ -180,6 +190,21 @@ export class EventView extends BaseComponent {
     bannerText.textContent = cancelled
       ? 'This event was cancelled by the organizer.'
       : 'This event was updated by the organizer — showing the latest version.';
+  }
+
+  // Confirms an organizer-key import: this browser now holds the channel
+  // secret and can sign updates/cancellations for the event.
+  showOrganizerImported() {
+    this.#organizerImported = true;
+    this.$('#organizer-notice')?.classList.remove('hidden');
+  }
+
+  // Discreet pointer for an event with an update channel this device has
+  // no key for: we cannot know whether the viewer is the organizer, so we
+  // only suggest where the organizer link would go.
+  showOrganizerHint() {
+    this.#organizerHint = true;
+    this.$('#organizer-hint')?.classList.remove('hidden');
   }
 
   // Tells the organizer their just-made change didn't reach any relay yet.
