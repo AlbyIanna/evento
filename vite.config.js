@@ -19,6 +19,7 @@ export default defineConfig({
   build: {
     outDir: '../../dist',
     emptyOutDir: true,
+    sourcemap: process.env.NODE_ENV === 'production' ? 'hidden' : true,
     minify: 'terser',
     terserOptions: {
       compress: {
@@ -59,7 +60,6 @@ export default defineConfig({
       ]
     })
   ],
-  sourcemap: process.env.NODE_ENV === 'production' ? 'hidden' : true,
   css: {
     devSourcemap: true,
     postcss: {

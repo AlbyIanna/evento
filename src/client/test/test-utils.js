@@ -14,26 +14,6 @@ export function loadComponentTemplate(componentDir, templateFile) {
 }
 
 /**
- * Creates a mock for the templateUtils module
- * @param {Object} templates - Object mapping template names to content
- * @returns {Object} Mocked templateUtils module
- */
-export function mockTemplateUtils(templates) {
-  return {
-    loadTemplate: vi.fn(async path => {
-      if (path.includes('template.html')) {
-        if (path.includes('error-template.html')) {
-          return templates.errorTemplate || '<div>Error template</div>';
-        } else {
-          return templates.mainTemplate || '<div>Main template</div>';
-        }
-      }
-      return '<div>Fallback content</div>';
-    })
-  };
-}
-
-/**
  * Setup for the window.location mock
  * @param {Object} locationParams - Location parameters to set
  * @returns {void}

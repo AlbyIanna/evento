@@ -14,7 +14,7 @@ import {
 } from './services/updates/updatesService.js';
 
 // --- Mocks for utility modules ---
-vi.mock('./utils/dateUtils.js', () => ({
+vi.mock('./services/date/dateService.js', () => ({
   formatDate: vi.fn(date => '01/01/2024'),
   formatTime: vi.fn(time => '12:00 PM')
 }));
@@ -28,10 +28,6 @@ vi.mock('./utils/eventUtils.js', () => ({
     description: 'Test Description'
   })),
   validateEventData: vi.fn(data => true)
-}));
-
-vi.mock('./utils/formUtils.js', () => ({
-  clearErrors: vi.fn()
 }));
 
 vi.mock('./services/updates/updatesService.js', () => ({
@@ -141,7 +137,7 @@ describe('App.js', () => {
       datetime: '2024-01-01T12:00',
       location: 'Test Location',
       description: 'Test Description',
-      // Date and time formatting come from mocked dateUtils
+      // Date and time formatting come from the mocked dateService
       date: '01/01/2024',
       time: '12:00 PM'
     });

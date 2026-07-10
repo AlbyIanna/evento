@@ -22,36 +22,22 @@ export async function loadTemplate(path) {
     const absolutePath = path.startsWith('./') ? path.substring(1) : path;
     const url = new URL(absolutePath, window.location.origin);
 
-    // In test environment, fetch might be mocked
-    try {
-      const response = await fetch(url.toString());
+    const response = await fetch(url.toString());
 
-      if (!response.ok) {
-        throw new Error(`Failed to load template: ${path}`);
-      }
-
-      // If the body has already been used, we can't read it again
-      if (response.bodyUsed) {
-        throw new Error('Response body has already been read');
-      }
-
-      const template = await response.text();
-
-      // Cache the template
-      templateCache.set(path, template);
-      return template;
-    } catch (error) {
-      // In test environment, return a mock template
-      if (process.env.NODE_ENV === 'test' || typeof window === 'undefined') {
-        console.warn(`Using mock template for ${path} in test environment`);
-        const mockTemplate = `<div id="mock-template" data-path="${path}">Mock template for ${path}</div>`;
-        templateCache.set(path, mockTemplate);
-        return mockTemplate;
-      }
-
-      console.error('Template loading error:', error);
-      throw error;
+    if (!response.ok) {
+      throw new Error(`Failed to load template: ${path}`);
     }
+
+    // If the body has already been used, we can't read it again
+    if (response.bodyUsed) {
+      throw new Error('Response body has already been read');
+    }
+
+    const template = await response.text();
+
+    // Cache the template
+    templateCache.set(path, template);
+    return template;
   } catch (error) {
     console.error('Template loading error:', error);
     throw error;

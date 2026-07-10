@@ -1,4 +1,4 @@
-import { formatDate, formatTime } from './utils/dateUtils.js';
+import { formatDate, formatTime } from './services/date/dateService.js';
 import { encodeEventData, decodeEventData, validateEventData } from './utils/eventUtils.js';
 import { setLoading, toggleContainers } from './utils/uiUtils.js';
 import { appState } from './utils/stateManager.js';

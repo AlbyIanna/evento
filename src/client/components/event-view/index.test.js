@@ -9,13 +9,7 @@ import {
   shadowTab,
   getActiveElementPath
 } from '../../../test/shadow-dom-utils.js';
-import {
-  loadComponentTemplate,
-  mockTemplateUtils,
-  setupLocationMock,
-  setupClipboardMock,
-  testAccessibility
-} from '../../test/test-utils.js';
+import { setupLocationMock, setupClipboardMock, testAccessibility } from '../../test/test-utils.js';
 
 // Mock all modules before importing the component
 // Read the actual template files
