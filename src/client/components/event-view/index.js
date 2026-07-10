@@ -185,7 +185,15 @@ export class EventView extends BaseComponent {
   // Tells the organizer their just-made change didn't reach any relay yet.
   showPublishWarning() {
     const warning = this.$('#publish-warning');
-    if (warning) warning.classList.remove('hidden');
+    const text = this.$('#publish-warning-text');
+    if (!warning) return;
+    if (text) {
+      // Reset explicitly: a showPublishPartial from an earlier view in the
+      // same session may have overwritten the default template text.
+      text.textContent =
+        "Couldn't reach the relays — your change isn't published yet. Reopen this link to retry.";
+    }
+    warning.classList.remove('hidden');
   }
 
   // Honest publish report when the change landed on only part of the relay

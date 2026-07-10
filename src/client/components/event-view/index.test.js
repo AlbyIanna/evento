@@ -674,4 +674,15 @@ describe('EventView Component', () => {
       "Published to 1 of 4 relays — some relays couldn't be reached."
     );
   });
+
+  it('resets to the zero-coverage text when showPublishWarning follows showPublishPartial', async () => {
+    // Same session, two publishes: a partial one mutated the warning text,
+    // then a fully failed one must not show the stale "Published to N of M".
+    eventView.showPublishPartial(1, 4);
+    eventView.showPublishWarning();
+
+    expect(eventView.$('#publish-warning-text').textContent).toBe(
+      "Couldn't reach the relays — your change isn't published yet. Reopen this link to retry."
+    );
+  });
 });
