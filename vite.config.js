@@ -19,6 +19,7 @@ export default defineConfig({
   build: {
     outDir: '../../dist',
     emptyOutDir: true,
+    sourcemap: process.env.NODE_ENV === 'production' ? 'hidden' : true,
     minify: 'terser',
     terserOptions: {
       compress: {
@@ -46,8 +47,8 @@ export default defineConfig({
     // In the future you can pass an object to override or extend the defaults.
     cspPlugin({
       'default-src': ["'self'"],
-      'style-src': ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
-      'font-src': ["'self'", 'https://cdnjs.cloudflare.com'],
+      'style-src': ["'self'", "'unsafe-inline'"],
+      'font-src': ["'self'"],
       // Update channel WebSockets. 'wss:' must stay a scheme wildcard
       // because the relay list is user-configurable (localStorage
       // 'evento.relays'); the plaintext localhost relay is for the e2e
@@ -59,7 +60,6 @@ export default defineConfig({
       ]
     })
   ],
-  sourcemap: process.env.NODE_ENV === 'production' ? 'hidden' : true,
   css: {
     devSourcemap: true,
     postcss: {
@@ -88,7 +88,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./test/setup.js'],
-    include: ['./**/*.test.js', '../shared/**/*.test.js'],
+    include: ['./**/*.test.js', '../shared/**/*.test.js', '../server.test.js'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

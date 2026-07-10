@@ -1,37 +1,5 @@
 import { vi } from 'vitest';
 import { axe } from 'jest-axe';
-import fs from 'fs';
-import path from 'path';
-
-/**
- * Loads a template file from a component directory
- * @param {string} componentDir - The component directory path
- * @param {string} templateFile - The template file name (e.g., 'template.html')
- * @returns {string} The template content
- */
-export function loadComponentTemplate(componentDir, templateFile) {
-  return fs.readFileSync(path.resolve(componentDir, templateFile), 'utf8');
-}
-
-/**
- * Creates a mock for the templateUtils module
- * @param {Object} templates - Object mapping template names to content
- * @returns {Object} Mocked templateUtils module
- */
-export function mockTemplateUtils(templates) {
-  return {
-    loadTemplate: vi.fn(async path => {
-      if (path.includes('template.html')) {
-        if (path.includes('error-template.html')) {
-          return templates.errorTemplate || '<div>Error template</div>';
-        } else {
-          return templates.mainTemplate || '<div>Main template</div>';
-        }
-      }
-      return '<div>Fallback content</div>';
-    })
-  };
-}
 
 /**
  * Setup for the window.location mock

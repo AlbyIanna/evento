@@ -7,7 +7,7 @@ export function cspPlugin(policies = {}) {
   // Default policies
   const defaultPolicies = {
     'default-src': ["'self'"],
-    'style-src': ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com']
+    'style-src': ["'self'", "'unsafe-inline'"]
     // Add other defaults as needed
   };
 

@@ -2,6 +2,8 @@
  * Form validation service
  * Provides functions for validating form inputs and managing validation state
  */
+import { isPlausibleContact } from '../../../shared/eventFormat.js';
+import { t } from '../../i18n.js';
 
 /**
  * Validate a single input field
@@ -26,7 +28,7 @@ export function validateInput(input, errorElement) {
   if (!input.checkValidity()) {
     input.classList.add('invalid');
     if (errorElement) {
-      errorElement.textContent = input.validationMessage || 'This field is required';
+      errorElement.textContent = input.validationMessage || t('form.errorRequired');
       errorElement.classList.remove('hidden');
     }
     return false;
@@ -41,11 +43,22 @@ export function validateInput(input, errorElement) {
     if (dateTimeValue < now) {
       input.classList.add('invalid');
       if (errorElement) {
-        errorElement.textContent = 'Please select a future date and time';
+        errorElement.textContent = t('form.errorPastDate');
         errorElement.classList.remove('hidden');
       }
       return false;
     }
+  }
+
+  // Special validation for the optional organizer contact: when present it
+  // must look like an email address or a phone number (no verification).
+  if (input.id === 'contact' && input.value.trim() && !isPlausibleContact(input.value)) {
+    input.classList.add('invalid');
+    if (errorElement) {
+      errorElement.textContent = t('form.errorContact');
+      errorElement.classList.remove('hidden');
+    }
+    return false;
   }
 
   return true;
@@ -60,10 +73,12 @@ export function validateInput(input, errorElement) {
  * @returns {boolean} - Whether the form is valid
  */
 export function validateForm(form, getErrorElement, validationSummary, validationErrors) {
-  const inputs = form.querySelectorAll('input[required], textarea[required]');
+  // Validate every text-like input: required ones for presence, optional
+  // ones (like the organizer contact) for shape. validateInput accepts
+  // empty optional fields, so this stays a no-op for untouched fields.
+  const inputs = form.querySelectorAll('input:not([type="checkbox"]), textarea');
   let isValid = true;
 
-  // Validate all required inputs
   inputs.forEach(input => {
     const errorElement = getErrorElement(input);
     if (!validateInput(input, errorElement)) {

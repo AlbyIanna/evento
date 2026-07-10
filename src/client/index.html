@@ -61,19 +61,18 @@
         max-width: 100%;
       }
     </style>
-    <!-- Font Awesome for icons -->
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-    />
     <!-- Non-critical CSS -->
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main>
       <div id="create-event" class="container">
-        <h1>Create Event</h1>
+        <h1 data-i18n="app.createTitle">Create Event</h1>
         <event-form></event-form>
+      </div>
+
+      <div id="link-ready" class="container hidden">
+        <link-ready></link-ready>
       </div>
 
       <div id="view-event" class="container hidden">
@@ -83,6 +82,7 @@
 
     <!-- Load web components -->
     <script type="module" src="./components/event-form/index.js"></script>
+    <script type="module" src="./components/link-ready/index.js"></script>
     <script type="module" src="./components/event-view/index.js"></script>
 
     <!-- Inline script to initialize the app with proper cleanup -->

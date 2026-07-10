@@ -6,10 +6,11 @@
 /**
  * Format a date string to a human-readable format
  * @param {string} dateString - The date string to format
+ * @param {string} [locale] - BCP 47 locale tag, defaults to 'en-US'
  * @returns {string} - The formatted date
  */
-export function formatDate(dateString) {
-  return new Date(dateString).toLocaleDateString('en-US', {
+export function formatDate(dateString, locale = 'en-US') {
+  return new Date(dateString).toLocaleDateString(locale, {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -20,13 +21,13 @@ export function formatDate(dateString) {
 /**
  * Format a time string to a human-readable format
  * @param {string} timeString - The time string to format
+ * @param {string} [locale] - BCP 47 locale tag, defaults to 'en-US'
  * @returns {string} - The formatted time
  */
-export function formatTime(timeString) {
-  return new Date(`2000-01-01T${timeString}`).toLocaleTimeString('en-US', {
+export function formatTime(timeString, locale = 'en-US') {
+  return new Date(`2000-01-01T${timeString}`).toLocaleTimeString(locale, {
     hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
+    minute: '2-digit'
   });
 }
 

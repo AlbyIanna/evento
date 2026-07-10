@@ -77,6 +77,23 @@ describe('EventForm Component', () => {
     expect(cancelButton.classList.contains('hidden')).toBe(true);
   });
 
+  it('should have decorative inline SVG icons properly marked', async () => {
+    const icons = eventForm.$$('svg.icon');
+
+    expect(icons.length).toBeGreaterThan(0);
+    icons.forEach(icon => {
+      expect(icon.getAttribute('aria-hidden')).toBe('true');
+      expect(icon.getAttribute('focusable')).toBe('false');
+      expect(icon.getAttribute('fill')).toBe('currentColor');
+    });
+  });
+
+  it('should not load any third-party resources from its template', async () => {
+    // Icons are inline SVG: no icon-font stylesheet, no external URLs at all.
+    expect(eventForm.shadowRoot.querySelectorAll('link')).toHaveLength(0);
+    expect(templateContent).not.toMatch(/https?:\/\//);
+  });
+
   it('should render the form with update and cancel buttons in edit mode', async () => {
     // Set edit mode
     eventForm.setEditMode(true);
@@ -184,6 +201,71 @@ describe('EventForm Component', () => {
     const customEvent = dispatchEventSpy.mock.calls[0][0];
     expect(customEvent.type).toBe('submit');
     expect(customEvent.detail.isEdit).toBe(true);
+  });
+
+  describe('organizer contact field (RSVP)', () => {
+    function fillRequiredFields() {
+      eventForm.$('#title').value = 'Test Event';
+      eventForm.$('#datetime').value = '2099-06-15T14:00';
+      eventForm.$('#location').value = 'Test Location';
+    }
+
+    it('renders an optional contact field with the transparency note', () => {
+      const contactInput = eventForm.$('#contact');
+      expect(contactInput).toBeTruthy();
+      expect(contactInput.required).toBe(false);
+
+      const hint = eventForm.$('#contact-hint');
+      expect(hint.textContent).toContain('part of the event link');
+      expect(contactInput.getAttribute('aria-describedby')).toContain('contact-hint');
+    });
+
+    it('submits the contact along with the rest of the form', () => {
+      const dispatchEventSpy = vi.spyOn(eventForm, 'dispatchEvent');
+      fillRequiredFields();
+      eventForm.$('#contact').value = '+39 333 1234567';
+
+      eventForm.$('#event-form').dispatchEvent(new Event('submit'));
+
+      const customEvent = dispatchEventSpy.mock.calls[0][0];
+      expect(customEvent.type).toBe('submit');
+      expect(customEvent.detail.formData.get('contact')).toBe('+39 333 1234567');
+    });
+
+    it('blocks submission and shows an error for an implausible contact', () => {
+      const dispatchEventSpy = vi.spyOn(eventForm, 'dispatchEvent');
+      fillRequiredFields();
+      eventForm.$('#contact').value = 'see you there';
+
+      eventForm.$('#event-form').dispatchEvent(new Event('submit'));
+
+      expect(dispatchEventSpy).not.toHaveBeenCalled();
+      const contactError = eventForm.$('#contact-error');
+      expect(contactError.classList.contains('hidden')).toBe(false);
+      expect(contactError.textContent).toBe('Enter a plausible email address or phone number');
+    });
+
+    it('accepts an empty contact (the field is optional)', () => {
+      const dispatchEventSpy = vi.spyOn(eventForm, 'dispatchEvent');
+      fillRequiredFields();
+
+      eventForm.$('#event-form').dispatchEvent(new Event('submit'));
+
+      expect(dispatchEventSpy).toHaveBeenCalled();
+      expect(eventForm.$('#contact-error').classList.contains('hidden')).toBe(true);
+    });
+
+    it('fills the contact field when editing an event that has one', () => {
+      eventForm.setEditMode(true);
+      eventForm.setEventData({
+        title: 'Test Event',
+        datetime: '2024-06-15T14:00',
+        location: 'Test Location',
+        contact: 'marco@example.com'
+      });
+
+      expect(eventForm.$('#contact').value).toBe('marco@example.com');
+    });
   });
 
   // Combined accessibility tests

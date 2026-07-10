@@ -1,0 +1,139 @@
+<style>
+  @import '/components/link-ready/styles.css';
+</style>
+<div
+  class="link-ready-container"
+  role="region"
+  aria-label="Event link ready"
+  data-i18n-attr="aria-label:linkReady.regionLabel"
+>
+  <h1 data-i18n="linkReady.heading">Your event link is ready</h1>
+  <p id="share-link" class="link-box" tabindex="0"></p>
+  <div class="link-warning" role="note">
+    <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+      <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+    </svg>
+    <span data-i18n-html="linkReady.warningHtml">
+      Save this link now — it is the <strong>only</strong> way to open this event. There is no
+      account and no recovery: lose the link and the event is gone.
+    </span>
+  </div>
+  <div class="button-container">
+    <button
+      id="share-button"
+      class="share-button"
+      aria-label="Share event link"
+      data-i18n-attr="aria-label:linkReady.shareAria"
+    >
+      <svg
+        class="icon"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path
+          d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"
+        />
+      </svg>
+      <span data-i18n="linkReady.shareButton">Share</span>
+    </button>
+    <button
+      id="copy-button"
+      class="copy-button"
+      aria-label="Copy event link to clipboard"
+      data-i18n-attr="aria-label:linkReady.copyAria"
+    >
+      <span id="copy-default"
+        ><svg
+          class="icon"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"
+          />
+        </svg>
+        <span data-i18n="linkReady.copyButton">Copy link</span></span
+      >
+      <span id="copy-success" class="hidden" aria-live="polite"
+        ><svg
+          class="icon"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+        </svg>
+        <span data-i18n="linkReady.copied">Copied!</span></span
+      >
+    </button>
+  </div>
+  <section
+    id="organizer-section"
+    class="organizer-section hidden"
+    aria-label="Organizer link"
+    data-i18n-attr="aria-label:linkReady.organizerAria"
+  >
+    <h2>
+      <svg
+        class="icon"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path
+          d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"
+        />
+      </svg>
+      <span data-i18n="linkReady.organizerHeading">Organizer link — keep it secret</span>
+    </h2>
+    <p id="organizer-link" class="link-box organizer-box" tabindex="0"></p>
+    <p class="organizer-copy" data-i18n="linkReady.organizerCopy">
+      This link contains your event's signing key. It is what lets you edit or cancel the event from
+      another device — treat it like a password and share it with no one.
+    </p>
+    <button
+      id="copy-organizer-button"
+      class="copy-button"
+      aria-label="Copy organizer link to clipboard"
+      data-i18n-attr="aria-label:linkReady.copyOrganizerAria"
+    >
+      <span id="copy-organizer-default"
+        ><svg
+          class="icon"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"
+          />
+        </svg>
+        <span data-i18n="linkReady.copyOrganizerButton">Copy organizer link</span></span
+      >
+      <span id="copy-organizer-success" class="hidden" aria-live="polite"
+        ><svg
+          class="icon"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+        </svg>
+        <span data-i18n="linkReady.copied">Copied!</span></span
+      >
+    </button>
+  </section>
+  <div class="view-container">
+    <a id="view-event-button" class="view-event-button" href="/" data-i18n="linkReady.viewEvent"
+      >View event</a
+    >
+  </div>
+</div>

@@ -3,6 +3,14 @@
   width: 100%;
 }
 
+/* Inline SVG icons: sized and aligned like the icon font they replaced. */
+.icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  flex-shrink: 0;
+}
+
 h1,
 h2 {
   margin-bottom: 1.5rem;
@@ -28,6 +36,25 @@ h2 {
 
 #event-title.cancelled {
   text-decoration: line-through;
+}
+
+.organizer-notice {
+  background-color: rgba(40, 167, 69, 0.1);
+  color: #155724;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.organizer-hint {
+  color: #6c757d;
+  font-size: 0.8rem;
+  text-align: center;
+  margin: 1rem 0 0;
 }
 
 .publish-warning {
@@ -118,7 +145,8 @@ h2 {
 }
 
 .calendar-button,
-.gcal-button {
+.gcal-button,
+.rsvp-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -162,6 +190,22 @@ h2 {
 
 .gcal-button:focus-visible {
   box-shadow: 0 0 0 3px rgba(108, 117, 125, 0.5);
+  outline: none;
+}
+
+.rsvp-button {
+  background-color: #007bff;
+}
+
+.rsvp-button:hover,
+.rsvp-button:focus {
+  background-color: #0069d9;
+  color: white;
+  outline: none;
+}
+
+.rsvp-button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.5);
   outline: none;
 }
 

@@ -9,13 +9,7 @@ import {
   shadowTab,
   getActiveElementPath
 } from '../../../test/shadow-dom-utils.js';
-import {
-  loadComponentTemplate,
-  mockTemplateUtils,
-  setupLocationMock,
-  setupClipboardMock,
-  testAccessibility
-} from '../../test/test-utils.js';
+import { setupLocationMock, setupClipboardMock, testAccessibility } from '../../test/test-utils.js';
 
 // Mock all modules before importing the component
 // Read the actual template files
@@ -377,12 +371,21 @@ describe('EventView Component', () => {
     expect(copyPopup.getAttribute('aria-live')).toBe('polite');
   });
 
-  it('should have decorative icons properly marked', async () => {
-    const icons = eventView.$$('i');
+  it('should have decorative inline SVG icons properly marked', async () => {
+    const icons = eventView.$$('svg.icon');
 
+    expect(icons.length).toBeGreaterThan(0);
     icons.forEach(icon => {
       expect(icon.getAttribute('aria-hidden')).toBe('true');
+      expect(icon.getAttribute('focusable')).toBe('false');
+      expect(icon.getAttribute('fill')).toBe('currentColor');
     });
+  });
+
+  it('should not load any third-party resources from its template', async () => {
+    // Icons are inline SVG: no icon-font stylesheet, no external URLs at all.
+    expect(eventView.shadowRoot.querySelectorAll('link')).toHaveLength(0);
+    expect(templateContent).not.toMatch(/https?:\/\//);
   });
 
   it('should handle keyboard navigation correctly', async () => {
@@ -649,5 +652,140 @@ describe('EventView Component', () => {
     // A cancelled event offers no calendar buttons
     expect(eventView.$('#calendar-button').classList.contains('hidden')).toBe(true);
     expect(eventView.$('#gcal-button').classList.contains('hidden')).toBe(true);
+  });
+
+  it('shows the zero-coverage warning when showPublishWarning is called', async () => {
+    const warning = eventView.$('#publish-warning');
+    expect(warning.classList.contains('hidden')).toBe(true);
+
+    eventView.showPublishWarning();
+
+    expect(warning.classList.contains('hidden')).toBe(false);
+    expect(eventView.$('#publish-warning-text').textContent).toContain(
+      "your change isn't published yet"
+    );
+  });
+
+  it('reports N of M relay coverage when showPublishPartial is called', async () => {
+    const warning = eventView.$('#publish-warning');
+    expect(warning.classList.contains('hidden')).toBe(true);
+
+    eventView.showPublishPartial(1, 4);
+
+    expect(warning.classList.contains('hidden')).toBe(false);
+    expect(eventView.$('#publish-warning-text').textContent).toBe(
+      "Published to 1 of 4 relays — some relays couldn't be reached."
+    );
+  });
+
+  it('shows the confirmation when the organizer key is imported', async () => {
+    const notice = eventView.$('#organizer-notice');
+    expect(notice.classList.contains('hidden')).toBe(true);
+
+    eventView.showOrganizerImported();
+
+    expect(notice.classList.contains('hidden')).toBe(false);
+    expect(notice.textContent).toContain('this device can now edit or cancel this event');
+    expect(notice.getAttribute('role')).toBe('status');
+  });
+
+  it('shows the discreet organizer hint when asked', async () => {
+    const hint = eventView.$('#organizer-hint');
+    expect(hint.classList.contains('hidden')).toBe(true);
+
+    eventView.showOrganizerHint();
+
+    expect(hint.classList.contains('hidden')).toBe(false);
+    expect(hint.textContent).toContain('organizer link');
+  });
+
+  it('applies organizer notices raised before the template finished loading', async () => {
+    // displayEvent runs synchronously on page load, while the template is
+    // still fetching: the flags must survive until render applies them.
+    document.body.removeChild(eventView);
+    eventView = new EventView();
+
+    eventView.showOrganizerImported();
+    eventView.showOrganizerHint();
+    document.body.appendChild(eventView);
+    await eventView.connectedCallback();
+
+    expect(eventView.$('#organizer-notice').classList.contains('hidden')).toBe(false);
+    expect(eventView.$('#organizer-hint').classList.contains('hidden')).toBe(false);
+  });
+
+  describe('reply-to-organizer (RSVP) button', () => {
+    const baseEvent = {
+      title: 'Cena da Marco',
+      date: '04/15/2024',
+      time: '14:00',
+      location: 'Test Location'
+    };
+
+    it('stays hidden when the event carries no contact', () => {
+      eventView.setEventData(baseEvent);
+      expect(eventView.$('#rsvp-button').classList.contains('hidden')).toBe(true);
+    });
+
+    it('opens WhatsApp with a normalized number and a prefilled message for phone contacts', () => {
+      eventView.setEventData({ ...baseEvent, contact: '+39 333 123-4567' });
+
+      const rsvpButton = eventView.$('#rsvp-button');
+      expect(rsvpButton.classList.contains('hidden')).toBe(false);
+      expect(rsvpButton.getAttribute('href')).toBe(
+        `https://wa.me/393331234567?text=${encodeURIComponent('Hi! About "Cena da Marco"...')}`
+      );
+      // Opens in a new context without leaking the opener.
+      expect(rsvpButton.getAttribute('target')).toBe('_blank');
+      expect(rsvpButton.getAttribute('rel')).toContain('noopener');
+    });
+
+    it('opens the mail app with a prefilled body for email contacts', () => {
+      eventView.setEventData({ ...baseEvent, contact: 'marco@example.com' });
+
+      const rsvpButton = eventView.$('#rsvp-button');
+      expect(rsvpButton.classList.contains('hidden')).toBe(false);
+      expect(rsvpButton.getAttribute('href')).toBe(
+        `mailto:marco@example.com?body=${encodeURIComponent('Hi! About "Cena da Marco"...')}`
+      );
+    });
+
+    it('prefills the message in the active UI language', () => {
+      localStorage.setItem('evento.lang', 'it');
+      try {
+        eventView.setEventData({ ...baseEvent, contact: 'marco@example.com' });
+        expect(eventView.$('#rsvp-button').getAttribute('href')).toBe(
+          `mailto:marco@example.com?body=${encodeURIComponent('Ciao! Riguardo a "Cena da Marco"...')}`
+        );
+      } finally {
+        localStorage.removeItem('evento.lang');
+      }
+    });
+
+    it('never builds a link from an implausible contact (untrusted payload)', () => {
+      eventView.setEventData({ ...baseEvent, contact: 'javascript:alert(1)' });
+      const rsvpButton = eventView.$('#rsvp-button');
+      expect(rsvpButton.classList.contains('hidden')).toBe(true);
+      expect(rsvpButton.getAttribute('href')).toBeNull();
+    });
+
+    it('hides the button again when an update removes the contact', () => {
+      eventView.setEventData({ ...baseEvent, contact: 'marco@example.com' });
+      expect(eventView.$('#rsvp-button').classList.contains('hidden')).toBe(false);
+
+      eventView.applyUpdate({ ...baseEvent, status: 'confirmed' });
+      expect(eventView.$('#rsvp-button').classList.contains('hidden')).toBe(true);
+    });
+  });
+
+  it('resets to the zero-coverage text when showPublishWarning follows showPublishPartial', async () => {
+    // Same session, two publishes: a partial one mutated the warning text,
+    // then a fully failed one must not show the stale "Published to N of M".
+    eventView.showPublishPartial(1, 4);
+    eventView.showPublishWarning();
+
+    expect(eventView.$('#publish-warning-text').textContent).toBe(
+      "Couldn't reach the relays — your change isn't published yet. Reopen this link to retry."
+    );
   });
 });

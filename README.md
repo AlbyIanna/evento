@@ -11,6 +11,8 @@ A modern event-sharing application built with Fastify and Vite, designed to make
 - **Link previews**: Shared links show a title/date/location card in chats (path-carried events)
 - **Private links**: Optional fragment-carried links that never reach any server - no logs, no preview card
 - **Updatable links**: Opt-in — the creator's browser keeps a signing key so they can push a time change or cancellation to everyone who already has the link, via public Nostr relays (device-bound key, no recovery; updates are publicly readable on relays)
+- **Reply to organizer (zero-infrastructure RSVP)**: Optional contact (email or phone) that becomes a "Reply to organizer" button opening WhatsApp or the mail app — the contact travels in the link itself, visible to anyone who receives it
+- **Two languages**: UI and dates in Italian or English, picked from the browser language
 - **Accessibility-first design**
 
 ## Documentation
@@ -71,7 +73,7 @@ evento/
 ├── src/            # Source code
 │   ├── client/     # Frontend application
 │   ├── shared/     # Wire-format modules (encode/decode, ICS, preview card)
-│   └── server.js   # Backend server
+│   └── server.js   # Self-hostable server (SPA + /ics + OG previews)
 ├── netlify/        # Serverless projections
 │   ├── functions/  # /ics/<payload> → text/calendar, health
 │   └── edge-functions/ # Open Graph preview cards for link-preview bots
@@ -179,7 +181,22 @@ describe('Component', () => {
 
 ## Deployment
 
-The application is deployed using Netlify's native Git integration:
+Self-hosting is first class: the whole instance is a single Node process. The Netlify setup below is the projection used by the reference deployment.
+
+### Self-hosting
+
+```bash
+npm run build
+npm start
+```
+
+`src/server.js` serves the built SPA from `dist/` and the same stateless projections as the hosted instance: `/ics/<payload>` calendar downloads and Open Graph preview cards for link-preview bots. Set `PORT` to change the port (default 3000).
+
+By design the server keeps no data about your guests: request logging is disabled, so event payloads (which travel in URLs) and referrers never end up in logs.
+
+### Netlify
+
+The reference instance is deployed using Netlify's native Git integration:
 
 ### First-time Setup
 

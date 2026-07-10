@@ -1,10 +1,13 @@
-import { formatDate, formatTime } from './utils/dateUtils.js';
+import { formatDate, formatTime } from './services/date/dateService.js';
+import { t, getLanguage, getDateLocale, translateRoot } from './i18n.js';
 import { encodeEventData, decodeEventData, validateEventData } from './utils/eventUtils.js';
 import { setLoading, toggleContainers } from './utils/uiUtils.js';
 import { appState } from './utils/stateManager.js';
 import {
   generateUpdateChannel,
   ownsChannel,
+  exportChannelSecret,
+  importChannelSecret,
   markPendingPublish,
   peekPendingPublish,
   clearPendingPublish,
@@ -13,7 +16,7 @@ import {
 } from './services/updates/updatesService.js';
 
 // DOM elements (will be set in initApp)
-let eventForm, eventView, createEventContainer, viewEventContainer;
+let eventForm, eventView, linkReady, createEventContainer, viewEventContainer, linkReadyContainer;
 
 // The event currently being edited — kept so a re-encode (update or cancel)
 // preserves its updates pointer instead of minting a new channel
@@ -32,6 +35,13 @@ export function handleFormSubmit(e) {
       location: formData.get('location').trim(),
       description: formData.get('description').trim()
     };
+
+    // Optional organizer contact for the zero-infrastructure RSVP button;
+    // it becomes part of the payload (and thus of the link) only when set.
+    const contact = (formData.get('contact') || '').trim();
+    if (contact) {
+      eventData.contact = contact;
+    }
 
     if (e.detail.isEdit) {
       // Never generate a new channel on edit: old-link holders can only be
@@ -64,17 +74,94 @@ export function handleFormSubmit(e) {
     // Private links carry the payload in the fragment, which browsers never
     // send to any server — so no preview card, no server-side copy
     const isPrivate = formData.get('private') === 'on';
-    const shareUrl = isPrivate
-      ? `${window.location.origin}/event?canEdit#${encodedEvent}`
-      : `${window.location.origin}/event/${encodedEvent}?canEdit`;
 
-    // Navigate to the event view page with edit permission
-    window.location.href = shareUrl;
+    if (e.detail.isEdit) {
+      // Navigate to the event view page with edit permission
+      window.location.href = isPrivate
+        ? `${window.location.origin}/event?canEdit#${encodedEvent}`
+        : `${window.location.origin}/event/${encodedEvent}?canEdit`;
+    } else {
+      // A brand-new event gets the "your link is ready" screen first: the
+      // link is the only way back to the event, so it must be impossible
+      // to miss before anything else happens.
+      showLinkReady(eventData, encodedEvent, isPrivate);
+    }
   } catch (error) {
     console.error('Form submission error:', error);
-    eventForm.showError('Failed to create event link. Please try again.');
+    eventForm.showError(t('form.submitError'));
   } finally {
     appState.setState({ isLoading: false });
+  }
+}
+
+function showLinkReady(eventData, encodedEvent, isPrivate) {
+  const origin = window.location.origin;
+  const shareUrl = isPrivate
+    ? `${origin}/event#${encodedEvent}`
+    : `${origin}/event/${encodedEvent}`;
+  const viewUrl = isPrivate
+    ? `${origin}/event?canEdit#${encodedEvent}`
+    : `${origin}/event/${encodedEvent}?canEdit`;
+
+  // Organizer capability URL: the channel secret rides in the FRAGMENT
+  // (never sent to any server, same rule as private payloads), so opening
+  // it on another device imports the key and that device can manage the
+  // event too.
+  let organizerUrl = null;
+  if (eventData.updates) {
+    const secret = exportChannelSecret(eventData.updates);
+    if (secret) {
+      organizerUrl = isPrivate
+        ? `${origin}/event?canEdit#${encodedEvent}&org=${secret}`
+        : `${origin}/event/${encodedEvent}?canEdit#org=${secret}`;
+    }
+  }
+
+  linkReady.setLinks({ title: eventData.title, shareUrl, viewUrl, organizerUrl });
+  toggleContainers(createEventContainer, linkReadyContainer, 'link-ready');
+
+  // Keep the address bar holding the event while this screen is up: an
+  // accidental refresh must not destroy the only copy of the link before
+  // the user saved it. replaceState navigates nothing, so the screen stays.
+  try {
+    window.history.replaceState(null, '', viewUrl);
+  } catch {
+    // history unavailable: the on-screen link is still there to copy
+  }
+}
+
+/**
+ * Fragment grammar. The fragment can carry two '&'-separated things: the
+ * event payload (private links) and the organizer key ('org=<64-hex>').
+ * Payloads (base64url, or legacy '+' base64 possibly '='-padded at the
+ * end) never contain '&' and never start with 'org=' — '=' can only be
+ * trailing padding — so the two segment kinds cannot be confused.
+ */
+export function parseFragment(hash) {
+  let payload = '';
+  let orgKey = null;
+  for (const part of hash.split('&')) {
+    if (part.startsWith('org=')) {
+      orgKey = part.slice('org='.length);
+    } else if (part && !payload) {
+      payload = part;
+    }
+  }
+  return { payload, orgKey };
+}
+
+// Removes the organizer secret from the address bar, keeping the payload
+// when it is fragment-carried. replaceState never fires hashchange, so no
+// re-routing happens.
+function stripOrganizerKeyFromUrl(fragmentPayload) {
+  const cleanUrl =
+    window.location.pathname +
+    window.location.search +
+    (fragmentPayload ? `#${fragmentPayload}` : '');
+  try {
+    window.history.replaceState(null, '', cleanUrl);
+  } catch {
+    // history unavailable: the fragment still never reaches any server
   }
 }
 
@@ -82,16 +169,19 @@ function formatForDisplay(eventData) {
   const formattedEventData = { ...eventData };
   const start = eventData.start || eventData.datetime;
   if (start) {
+    // Dates render in the language the UI speaks (e.g. "venerdì 13 marzo
+    // 2026" for Italian users), not a hardcoded locale.
+    const locale = getDateLocale();
     if (eventData.tz && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(start)) {
       // v2 events: start is the wall-clock time in the event's own
       // timezone — display it as-is, without viewer-local conversion.
-      formattedEventData.date = formatDate(start);
-      formattedEventData.time = formatTime(start.slice(11, 16));
+      formattedEventData.date = formatDate(start, locale);
+      formattedEventData.time = formatTime(start.slice(11, 16), locale);
     } else {
       // Legacy v1 events keep their historical "floating time" rendering.
       const datetime = new Date(start);
-      formattedEventData.date = formatDate(datetime.toISOString());
-      formattedEventData.time = formatTime(datetime.toTimeString().split(' ')[0]);
+      formattedEventData.date = formatDate(datetime.toISOString(), locale);
+      formattedEventData.time = formatTime(datetime.toTimeString().split(' ')[0], locale);
     }
   }
   return formattedEventData;
@@ -108,8 +198,13 @@ function checkForUpdates(eventData, encodedEvent) {
         // We just authored this version; publish it and don't fetch (a
         // lagging relay could otherwise echo an older version back onto us).
         const published = await publishCurrentVersion(eventData, encodedEvent);
-        if (published) {
+        if (published.ok) {
           clearPendingPublish();
+          if (published.ackCount < published.relayCount) {
+            // Honest report: the change landed, but only on part of the
+            // relay set — don't claim a full publish.
+            eventView.showPublishPartial?.(published.ackCount, published.relayCount);
+          }
         } else {
           // Leave the gate armed so reopening the link retries, and tell the
           // organizer the change hasn't propagated yet.
@@ -127,7 +222,7 @@ function checkForUpdates(eventData, encodedEvent) {
   })();
 }
 
-export function displayEvent(encodedEvent) {
+export function displayEvent(encodedEvent, orgKey = null) {
   if (appState.getState('isLoading')) return;
 
   try {
@@ -142,8 +237,20 @@ export function displayEvent(encodedEvent) {
     // Update event view
     eventView.setEventData(formatForDisplay(eventData));
     toggleContainers(createEventContainer, viewEventContainer, 'view');
+    // A same-document (fragment-only) navigation can land here while the
+    // post-creation screen is still up: hide it too, or both would stack.
+    linkReadyContainer?.classList.add('hidden');
 
     if (eventData.updates) {
+      if (orgKey !== null && importChannelSecret(orgKey, eventData.updates)) {
+        // Organizer capability URL: the key matches this event's channel
+        // and is now in this browser's localStorage.
+        eventView.showOrganizerImported?.();
+      } else if (!ownsChannel(eventData.updates)) {
+        // We cannot know whether this viewer is the organizer, so the
+        // honest move is a discreet pointer to the organizer link.
+        eventView.showOrganizerHint?.();
+      }
       checkForUpdates(eventData, encodedEvent);
     }
   } catch (err) {
@@ -191,7 +298,7 @@ export async function editEvent(encodedEvent) {
     eventForm.setCanCancel?.(Boolean(baseEvent.updates && ownsChannel(baseEvent.updates)));
     eventForm.setCancelledNotice?.(baseEvent.status === 'cancelled');
     toggleContainers(viewEventContainer, createEventContainer, 'create');
-    document.querySelector('#create-event h1').textContent = 'Edit Event';
+    document.querySelector('#create-event h1').textContent = t('app.editTitle');
   } catch (err) {
     console.error('Failed to decode event for editing:', err);
     eventView.showError();
@@ -218,7 +325,7 @@ export function handleCancelEvent() {
     window.location.href = shareUrl;
   } catch (error) {
     console.error('Cancel event error:', error);
-    eventForm.showError?.('Failed to cancel the event. Please try again.');
+    eventForm.showError?.(t('form.cancelError'));
   }
 }
 
@@ -233,11 +340,19 @@ function setupStateSubscriptions() {
 }
 
 export function initApp() {
+  // Localize the static document chrome (components localize their own
+  // shadow templates as they load).
+  document.documentElement.lang = getLanguage();
+  document.title = t('app.pageTitle');
+  translateRoot(document);
+
   // Query DOM elements
   createEventContainer = document.getElementById('create-event');
   viewEventContainer = document.getElementById('view-event');
+  linkReadyContainer = document.getElementById('link-ready');
   eventForm = document.querySelector('event-form');
   eventView = document.querySelector('event-view');
+  linkReady = document.querySelector('link-ready');
 
   // Set up state subscriptions
   setupStateSubscriptions();
@@ -247,6 +362,7 @@ export function initApp() {
     const path = window.location.pathname;
     const hash = (window.location.hash || '').slice(1);
     if (path === '/event' || path.startsWith('/event/')) {
+      const { payload: fragmentPayload, orgKey } = parseFragment(hash);
       const isEdit = path.endsWith('/edit');
       let encodedEvent = path.startsWith('/event/') ? path.slice('/event/'.length) : '';
       if (encodedEvent === 'edit') {
@@ -255,13 +371,20 @@ export function initApp() {
       } else if (encodedEvent.endsWith('/edit')) {
         encodedEvent = encodedEvent.slice(0, -'/edit'.length);
       }
-      if (!encodedEvent && hash) {
-        encodedEvent = hash;
+      let payloadInFragment = false;
+      if (!encodedEvent && fragmentPayload) {
+        encodedEvent = fragmentPayload;
+        payloadInFragment = true;
+      }
+      if (orgKey !== null) {
+        // The secret must not linger in the address bar (or leak into
+        // copy/share/edit URLs built from it): strip it before rendering.
+        stripOrganizerKeyFromUrl(payloadInFragment ? encodedEvent : '');
       }
       if (isEdit) {
         editEvent(encodedEvent);
       } else {
-        displayEvent(encodedEvent);
+        displayEvent(encodedEvent, orgKey);
       }
     }
   };

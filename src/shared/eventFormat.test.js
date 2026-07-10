@@ -7,7 +7,10 @@ import {
   validateEventData,
   normalizeEventData,
   isValidTimeZone,
-  isValidEncodedParam
+  isValidEncodedParam,
+  isPlausibleContact,
+  isEmailContact,
+  isPhoneContact
 } from './eventFormat.js';
 
 // The exact algorithm used by the historical client (src/client/utils/eventUtils.js
@@ -38,6 +41,7 @@ describe('event format v2', () => {
         tz: 'Europe/Rome',
         location: validV2.location,
         description: validV2.description,
+        contact: null,
         status: 'confirmed',
         updates: null
       });
@@ -86,6 +90,83 @@ describe('event format v2', () => {
     });
   });
 
+  describe('contact field (organizer RSVP)', () => {
+    it('round-trips an email contact', () => {
+      const decoded = decodeEventData(
+        encodeEventData({ ...validV2, contact: 'marco@example.com' })
+      );
+      expect(decoded.contact).toBe('marco@example.com');
+    });
+
+    it('round-trips a phone contact', () => {
+      const decoded = decodeEventData(encodeEventData({ ...validV2, contact: '+39 333 123 4567' }));
+      expect(decoded.contact).toBe('+39 333 123 4567');
+    });
+
+    it('normalizes an absent or empty contact to null', () => {
+      expect(decodeEventData(encodeEventData(validV2)).contact).toBeNull();
+      expect(normalizeEventData({ ...validV2, contact: '' }).contact).toBeNull();
+    });
+
+    it('omits the contact key from the payload when empty', () => {
+      const encoded = encodeEventData({ ...validV2, contact: '' });
+      const json = JSON.parse(
+        new TextDecoder().decode(
+          Uint8Array.from(atob(encoded.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))
+        )
+      );
+      expect(json).not.toHaveProperty('contact');
+    });
+
+    it('rejects implausible contacts on encode', () => {
+      ['not a contact', 'javascript:alert(1)', 'a@b', '12345', 'mail@ex ample.com'].forEach(bad => {
+        expect(() => encodeEventData({ ...validV2, contact: bad })).toThrow();
+      });
+    });
+
+    it('enforces the contact length limit on encode', () => {
+      const longEmail = `${'a'.repeat(LIMITS.contact)}@example.com`;
+      expect(() => encodeEventData({ ...validV2, contact: longEmail })).toThrow();
+    });
+
+    it('stays lenient on decode: a junk contact does not break the event', () => {
+      // Handcrafted payload (as a foreign encoder might produce): the event
+      // must still decode; renderers ignore the implausible value.
+      const payload = { v: 2, ...validV2, contact: 'see you there' };
+      const encoded = btoa(JSON.stringify(payload))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+      const decoded = decodeEventData(encoded);
+      expect(decoded.title).toBe(validV2.title);
+      expect(decoded.contact).toBe('see you there');
+      expect(isPlausibleContact(decoded.contact)).toBe(false);
+    });
+
+    it('rejects a non-string contact shape', () => {
+      expect(validateEventData({ ...validV2, contact: 42 })).toBe(false);
+      expect(validateEventData({ ...validV2, contact: { email: 'x@y.zz' } })).toBe(false);
+      expect(validateEventData({ ...validV2, contact: null })).toBe(true);
+    });
+
+    it('classifies plausible emails and phones', () => {
+      expect(isEmailContact('marco@example.com')).toBe(true);
+      expect(isEmailContact('marco+rsvp@sub.example.co.uk')).toBe(true);
+      // URL metacharacters are excluded so mailto: hrefs cannot be extended.
+      expect(isEmailContact('a?b@example.com')).toBe(false);
+      expect(isEmailContact('a@example.com/path')).toBe(false);
+      expect(isEmailContact('plainaddress')).toBe(false);
+
+      expect(isPhoneContact('+39 333 123 4567')).toBe(true);
+      expect(isPhoneContact('333-123-4567')).toBe(true);
+      expect(isPhoneContact('(02) 1234567')).toBe(false); // must not start with '('
+      expect(isPhoneContact('02 1234567')).toBe(true);
+      expect(isPhoneContact('12345')).toBe(false); // too few digits
+      expect(isPhoneContact('+' + '1'.repeat(16))).toBe(false); // too many digits
+      expect(isPhoneContact('call me maybe')).toBe(false);
+    });
+  });
+
   describe('legacy v1 compatibility', () => {
     const legacyEvent = {
       title: 'Cena da Marco & Anna',
@@ -108,6 +189,7 @@ describe('event format v2', () => {
         tz: null,
         location: legacyEvent.location,
         description: legacyEvent.description,
+        contact: null,
         status: 'confirmed',
         updates: null
       });
@@ -246,6 +328,7 @@ describe('event format v2', () => {
         tz: null,
         location: 'L',
         description: '',
+        contact: null,
         status: 'confirmed',
         updates: null
       });

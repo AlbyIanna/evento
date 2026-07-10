@@ -1,6 +1,8 @@
 import { BaseComponent } from '../../utils/baseComponent.js';
 import { appState } from '../../utils/stateManager.js';
 import { buildIcs, buildGoogleCalendarUrl } from '../../../shared/ics.js';
+import { isEmailContact, isPhoneContact } from '../../../shared/eventFormat.js';
+import { t } from '../../i18n.js';
 
 export class EventView extends BaseComponent {
   #eventData = null;
@@ -8,6 +10,10 @@ export class EventView extends BaseComponent {
   #hasEditPermission = false;
   #currentUrl = '';
   #icsBlobUrl = null;
+  // Buffered flags: these can be raised before the template has loaded
+  // (displayEvent runs synchronously, the template fetch does not).
+  #organizerImported = false;
+  #organizerHint = false;
 
   constructor() {
     super();
@@ -40,6 +46,12 @@ export class EventView extends BaseComponent {
     if (this.#eventData) {
       this.#updateDom(this.#eventData);
       this.#showBanner(this.#eventData.status === 'cancelled' ? 'cancelled' : 'none');
+    }
+    if (this.#organizerImported) {
+      this.$('#organizer-notice')?.classList.remove('hidden');
+    }
+    if (this.#organizerHint) {
+      this.$('#organizer-hint')?.classList.remove('hidden');
     }
   }
 
@@ -77,8 +89,12 @@ export class EventView extends BaseComponent {
     if (navigator.share) {
       navigator
         .share({
-          title: this.#eventData?.title || 'Event Details',
-          text: `Join me at ${this.#eventData?.title} on ${this.#eventData?.date} at ${this.#eventData?.time}`,
+          title: this.#eventData?.title || t('view.shareTitleFallback'),
+          text: t('view.shareText', {
+            title: this.#eventData?.title,
+            date: this.#eventData?.date,
+            time: this.#eventData?.time
+          }),
           // Drop the query string (canEdit) but keep the fragment, which
           // carries the whole event for private links
           url: window.location.origin + window.location.pathname + (window.location.hash || '')
@@ -123,7 +139,7 @@ export class EventView extends BaseComponent {
       })
       .catch(err => {
         console.error('Failed to copy URL:', err);
-        alert('Failed to copy event link. Please copy the URL manually.');
+        alert(t('view.copyFailed'));
       });
   }
 
@@ -177,15 +193,45 @@ export class EventView extends BaseComponent {
     }
     // Unhide before writing the text so the aria-live region announces it.
     banner.classList.remove('hidden');
-    bannerText.textContent = cancelled
-      ? 'This event was cancelled by the organizer.'
-      : 'This event was updated by the organizer — showing the latest version.';
+    bannerText.textContent = cancelled ? t('view.bannerCancelled') : t('view.bannerUpdated');
+  }
+
+  // Confirms an organizer-key import: this browser now holds the channel
+  // secret and can sign updates/cancellations for the event.
+  showOrganizerImported() {
+    this.#organizerImported = true;
+    this.$('#organizer-notice')?.classList.remove('hidden');
+  }
+
+  // Discreet pointer for an event with an update channel this device has
+  // no key for: we cannot know whether the viewer is the organizer, so we
+  // only suggest where the organizer link would go.
+  showOrganizerHint() {
+    this.#organizerHint = true;
+    this.$('#organizer-hint')?.classList.remove('hidden');
   }
 
   // Tells the organizer their just-made change didn't reach any relay yet.
   showPublishWarning() {
     const warning = this.$('#publish-warning');
-    if (warning) warning.classList.remove('hidden');
+    const text = this.$('#publish-warning-text');
+    if (!warning) return;
+    if (text) {
+      // Reset explicitly: a showPublishPartial from an earlier view in the
+      // same session may have overwritten the default template text.
+      text.textContent = t('view.publishWarning');
+    }
+    warning.classList.remove('hidden');
+  }
+
+  // Honest publish report when the change landed on only part of the relay
+  // set: it IS published, but with reduced redundancy.
+  showPublishPartial(ackCount, relayCount) {
+    const warning = this.$('#publish-warning');
+    const text = this.$('#publish-warning-text');
+    if (!warning || !text) return;
+    text.textContent = t('view.publishPartial', { ack: ackCount, total: relayCount });
+    warning.classList.remove('hidden');
   }
 
   #updateDom(eventData) {
@@ -217,6 +263,33 @@ export class EventView extends BaseComponent {
     }
 
     this.#updateCalendarLinks(eventData);
+    this.#updateRsvpButton(eventData);
+  }
+
+  // Zero-infrastructure RSVP: when the payload carries an organizer contact,
+  // the button opens WhatsApp (phone) or the mail app (email) with a message
+  // prefilled in the UI language. The contact comes from an untrusted URL, so
+  // only the two recognized shapes ever become a link, and both hrefs are
+  // constructed here — never taken verbatim from the payload.
+  #updateRsvpButton(eventData) {
+    const rsvpButton = this.$('#rsvp-button');
+    if (!rsvpButton) return;
+
+    rsvpButton.classList.add('hidden');
+    const contact = typeof eventData.contact === 'string' ? eventData.contact.trim() : '';
+    if (!contact) return;
+
+    const message = t('view.rsvpMessage', { title: eventData.title || '' });
+    let href = null;
+    if (isEmailContact(contact)) {
+      href = `mailto:${contact}?body=${encodeURIComponent(message)}`;
+    } else if (isPhoneContact(contact)) {
+      href = `https://wa.me/${contact.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+    }
+    if (!href) return;
+
+    rsvpButton.setAttribute('href', href);
+    rsvpButton.classList.remove('hidden');
   }
 
   #updateCalendarLinks(eventData) {
